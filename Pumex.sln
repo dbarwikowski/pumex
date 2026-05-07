@@ -1,0 +1,65 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.4.11605.240
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Daemon", "Pumex.Daemon\Pumex.Daemon.csproj", "{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Contracts", "Pumex.Contracts\Pumex.Contracts.csproj", "{74B32D77-9722-4FA6-977B-8EE468F9E3A4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Cli", "Pumex.Cli\Pumex.Cli.csproj", "{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Debug|x64.Build.0 = Debug|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Debug|x86.Build.0 = Debug|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Release|x64.ActiveCfg = Release|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Release|x64.Build.0 = Release|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Release|x86.ActiveCfg = Release|Any CPU
+		{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}.Release|x86.Build.0 = Release|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Debug|x64.Build.0 = Debug|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Debug|x86.Build.0 = Debug|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Release|x64.ActiveCfg = Release|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Release|x64.Build.0 = Release|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Release|x86.ActiveCfg = Release|Any CPU
+		{74B32D77-9722-4FA6-977B-8EE468F9E3A4}.Release|x86.Build.0 = Release|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Debug|x64.Build.0 = Debug|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Debug|x86.Build.0 = Debug|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Release|x64.ActiveCfg = Release|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Release|x64.Build.0 = Release|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Release|x86.ActiveCfg = Release|Any CPU
+		{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {EDAB22F8-FC1E-4783-8F9F-185A84D67995}
+	EndGlobalSection
+EndGlobal

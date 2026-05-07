@@ -1,0 +1,32 @@
+# .NET build output
+bin/
+obj/
+*.user
+*.suo
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+
+# Publish output
+publish/
+dist/
+out/
+
+# Test artifacts
+TestResults/
+*.trx
+*.coverage
+
+# Local SQLite (for ad-hoc daemon runs from the repo)
+*.db
+*.db-shm
+*.db-wal
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Per-user Claude Code permissions (settings.json, if added, IS shared)
+.claude/settings.local.json

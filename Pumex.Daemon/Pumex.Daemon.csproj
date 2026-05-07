@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-Pumex.Daemon-acffe07c-43d8-4cf5-ac9f-fc0f313834c3</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.7" />
+    <PackageReference Include="YamlDotNet" Version="17.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pumex.Contracts\Pumex.Contracts.csproj" />
+  </ItemGroup>
+</Project>
