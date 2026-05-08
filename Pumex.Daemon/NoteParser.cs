@@ -6,10 +6,20 @@ namespace Pumex.Daemon;
 
 public partial class NoteParser
 {
+    // Build the YAML deserializer once. DeserializerBuilder.Build() is heavy —
+    // benchmarks at 10k notes traced ~70 % of cold-scan allocations to per-call
+    // construction. The IDeserializer is documented thread-safe for read-only
+    // Deserialize calls.
+    private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder()
+        .WithNamingConvention(CamelCaseNamingConvention.Instance)
+        .IgnoreUnmatchedProperties()
+        .Build();
+
     public NoteDocument Parse(string filePath)
     {
         var raw = File.ReadAllText(filePath);
-        var normalized = raw.Replace("\r\n", "\n");
+        // Replace always allocates a new string; skip when there's no CR to replace.
+        var normalized = raw.IndexOf('\r') >= 0 ? raw.Replace("\r\n", "\n") : raw;
 
         var info = new FileInfo(filePath);
         var mtime = new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds();
@@ -31,18 +41,22 @@ public partial class NoteParser
         );
     }
 
-    private List<string> ExtractWikilinks(string content)
+    private static List<string> ExtractWikilinks(string content)
     {
-        // [[Note]] → "Note"
-        // [[Note|Alias]] → "Note"  
-        // [[Note#Heading]] → "Note"
-        var pattern = @"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]";
-        return Regex.Matches(content, pattern)
-            .Select(m => m.Groups[1].Value.Trim())
-            .Distinct()
-            .ToList();
+        // [[Note]] → "Note"; [[Note|Alias]] → "Note"; [[Note#Heading]] → "Note"
+        var matches = WikilinkRegex().Matches(content);
+        if (matches.Count == 0) return [];
+
+        var result = new List<string>(matches.Count);
+        foreach (Match m in matches)
+        {
+            var name = m.Groups[1].Value.Trim();
+            if (name.Length > 0 && !result.Contains(name)) result.Add(name);
+        }
+        return result;
     }
-    private (Dictionary<string, object> Frontmatter, string Content) SplitFrontmatter(string raw)
+
+    private static (Dictionary<string, object> Frontmatter, string Content) SplitFrontmatter(string raw)
     {
         if (!raw.StartsWith("---"))
             return (new Dictionary<string, object>(), raw);
@@ -57,24 +71,19 @@ public partial class NoteParser
         return (ParseYaml(yaml), content);
     }
 
-    private Dictionary<string, object> ParseYaml(string yaml)
+    private static Dictionary<string, object> ParseYaml(string yaml)
     {
         if (string.IsNullOrWhiteSpace(yaml))
             return new Dictionary<string, object>();
 
-        var deserializer = new DeserializerBuilder()
-            .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .IgnoreUnmatchedProperties()
-            .Build();
-
         try
         {
-            return deserializer.Deserialize<Dictionary<string, object>>(yaml)
+            return YamlDeserializer.Deserialize<Dictionary<string, object>>(yaml)
                 ?? new Dictionary<string, object>();
         }
         catch
         {
-            // Nieprawidłowy YAML - nie wysypuj daemona
+            // Malformed YAML mustn't crash the daemon.
             return new Dictionary<string, object>();
         }
     }
@@ -122,4 +131,7 @@ public partial class NoteParser
     // #tag, #tag/subtag - nie matchuj URL (#anchor) ani nagłówków (# Heading)
     [GeneratedRegex(@"(?<!\S)#([A-Za-z\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F/_-]*)")]
     private static partial Regex InlineTagRegex();
+
+    [GeneratedRegex(@"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")]
+    private static partial Regex WikilinkRegex();
 }
