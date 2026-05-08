@@ -14,10 +14,11 @@ publish/
 dist/
 out/
 
-# Test artifacts
+# Test / benchmark artifacts
 TestResults/
 *.trx
 *.coverage
+BenchmarkDotNet.Artifacts/
 
 # Local SQLite (for ad-hoc daemon runs from the repo)
 *.db
@@ -28,5 +29,7 @@ TestResults/
 .DS_Store
 Thumbs.db
 
-# Per-user Claude Code permissions (settings.json, if added, IS shared)
-.claude/settings.local.json
+# Local-only docs and Claude Code state
+.claude/
+CLAUDE.md
+context.md

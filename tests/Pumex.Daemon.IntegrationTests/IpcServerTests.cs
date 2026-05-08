@@ -1,0 +1,104 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using Pumex.Contracts;
+using Pumex.Daemon.Ipc;
+using Pumex.Daemon.IntegrationTests.Helpers;
+
+namespace Pumex.Daemon.IntegrationTests;
+
+[Collection("ipc-server")]
+public class IpcServerTests
+{
+    [Fact]
+    public async Task Ping_returns_pong_over_the_pipe()
+    {
+        await using var run = await IpcServerRun.StartAsync(handlers => handlers.Add(new PingHandler()));
+
+        var resp = await run.Client.SendAsync<string>("ping");
+
+        Assert.True(resp.Success);
+        Assert.Equal("pong", resp.Data);
+    }
+
+    [Fact]
+    public async Task Unknown_command_returns_failure_response()
+    {
+        await using var run = await IpcServerRun.StartAsync(_ => { });
+
+        var resp = await run.Client.SendAsync<object>("does-not-exist");
+
+        Assert.False(resp.Success);
+        Assert.Contains("does-not-exist", resp.Error);
+    }
+
+    [Fact]
+    public async Task Search_handler_returns_results_after_upserting_a_note()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        await using var run = await IpcServerRun.StartAsync(
+            handlers => handlers.Add(new SearchHandler(fixture.Db)),
+            db: fixture.Db);
+
+        var note = new NoteDocument(
+            Path: Path.Combine(fixture.Root, "n.md"),
+            Frontmatter: new Dictionary<string, object>(),
+            Tags: [],
+            OutgoingLinks: [],
+            Content: "ipc test marker word: marsupial",
+            RawContent: "ipc test marker word: marsupial",
+            Mtime: 1, Size: 32);
+        // Snippet builder reads from disk, so the file must actually exist.
+        File.WriteAllText(note.Path, note.Content);
+        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [note]);
+
+        var resp = await run.Client.SendAsync<List<SearchResult>>("search", new()
+        {
+            ["query"] = "marsupial",
+            ["vaultPath"] = fixture.Vault.Path,
+        });
+
+        Assert.True(resp.Success);
+        Assert.Single(resp.Data!);
+        Assert.Equal(note.Path, resp.Data![0].Path);
+    }
+
+    private sealed class IpcServerRun : IAsyncDisposable
+    {
+        public TestIpcClient Client { get; }
+        private readonly IpcServer _server;
+        private readonly Task _task;
+        private readonly CancellationTokenSource _cts;
+        private readonly TestVault? _ownedFixture;
+
+        private IpcServerRun(IpcServer server, Task task, CancellationTokenSource cts, TestIpcClient client, TestVault? ownedFixture)
+        {
+            _server = server;
+            _task = task;
+            _cts = cts;
+            Client = client;
+            _ownedFixture = ownedFixture;
+        }
+
+        public static async Task<IpcServerRun> StartAsync(Action<List<ICommandHandler>> configureHandlers, IndexDb? db = null)
+        {
+            var pipeName = "pumex-test-" + Guid.NewGuid().ToString("N");
+            var handlers = new List<ICommandHandler>();
+            configureHandlers(handlers);
+
+            var server = new IpcServer(handlers, NullLogger<IpcServer>.Instance, pipeName);
+            var cts = new CancellationTokenSource();
+            await server.StartAsync(cts.Token);
+            // BackgroundService.StartAsync hands control back as soon as ExecuteAsync hits its first await.
+            // The pipe server registers on the first WaitForConnectionAsync, so we give it a beat.
+            await Task.Delay(50);
+            return new IpcServerRun(server, Task.CompletedTask, cts, new TestIpcClient(pipeName), null);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            _cts.Cancel();
+            try { await _server.StopAsync(CancellationToken.None); } catch { }
+            _cts.Dispose();
+            _ownedFixture?.Dispose();
+        }
+    }
+}

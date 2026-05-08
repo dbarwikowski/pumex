@@ -10,28 +10,30 @@ public class IpcServer : BackgroundService
 {
     private readonly Dictionary<string, ICommandHandler> _handlers;
     private readonly ILogger<IpcServer> _logger;
+    private readonly string _pipeName;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
-    public IpcServer(IEnumerable<ICommandHandler> handlers, ILogger<IpcServer> logger)
+    public IpcServer(IEnumerable<ICommandHandler> handlers, ILogger<IpcServer> logger, string? pipeName = null)
     {
         _handlers = handlers.ToDictionary(h => h.Command, StringComparer.OrdinalIgnoreCase);
         _logger = logger;
+        _pipeName = pipeName ?? IpcResponse.PipeName;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        _logger.LogInformation("IPC server listening on pipe {Pipe}", IpcResponse.PipeName);
+        _logger.LogInformation("IPC server listening on pipe {Pipe}", _pipeName);
 
         while (!ct.IsCancellationRequested)
         {
             try
             {
                 var pipe = new NamedPipeServerStream(
-                    IpcResponse.PipeName,
+                    _pipeName,
                     PipeDirection.InOut,
                     NamedPipeServerStream.MaxAllowedServerInstances,
                     PipeTransmissionMode.Byte,

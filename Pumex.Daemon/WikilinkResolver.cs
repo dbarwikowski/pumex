@@ -26,8 +26,9 @@ public class WikilinkResolver
     public void Remove(string path)
     {
         var name = Path.GetFileNameWithoutExtension(path);
-        if (_nameIndex.TryGetValue(name, out var list))
-            list.Remove(path);
+        if (!_nameIndex.TryGetValue(name, out var list)) return;
+        list.Remove(path);
+        if (list.Count == 0) _nameIndex.Remove(name);
     }
 
     public string? Resolve(string linkText, string sourcePath)
