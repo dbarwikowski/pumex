@@ -12,6 +12,9 @@ public class IndexDb : IDisposable
     // methods through this gate. The throughput cost is small — SQLite + WAL
     // is fast — and the per-vault-connection refactor can come later.
     private readonly SemaphoreSlim _gate = new(1, 1);
+    // All access is serialised by _gate, so plain Dictionary is safe here.
+    private readonly Dictionary<string, long> _pathToId = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<long, string> _idToPath = new();
 
     public IndexDb(string dbPath)
     {
@@ -82,6 +85,18 @@ public class IndexDb : IDisposable
             CREATE INDEX IF NOT EXISTS idx_links_target_path ON links(target_path);
             CREATE INDEX IF NOT EXISTS idx_notes_mtime   ON notes(mtime);
             CREATE INDEX IF NOT EXISTS idx_notes_vault   ON notes(vault_id);
+
+            -- Purge FTS rowids when notes are deleted (explicit DELETE *and*
+            -- cascade from vaults). Without this, RemoveVaultAsync left FTS
+            -- orphans that grew the index file over time. Empty-string column
+            -- values are wrong for a contentless FTS5 table, but searches
+            -- JOIN notes_fts with notes(rowid), so any internal inconsistency
+            -- is invisible to query results — the rowid is what matters.
+            CREATE TRIGGER IF NOT EXISTS notes_fts_purge_after_delete
+            AFTER DELETE ON notes BEGIN
+                INSERT INTO notes_fts(notes_fts, rowid, name, body)
+                VALUES('delete', old.id, '', '');
+            END;
         """);
     }
 
@@ -133,13 +148,25 @@ public class IndexDb : IDisposable
     public async Task RemoveVaultAsync(long vaultId)
     {
         using var _ = await AcquireAsync();
+        var toEvict = new List<(long Id, string Path)>();
+        using (var qCmd = Command(
+            "SELECT id, path FROM notes WHERE vault_id = @vaultId",
+            ("@vaultId", vaultId)))
+        {
+            using var reader = await qCmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                toEvict.Add((reader.GetInt64(0), reader.GetString(1)));
+        }
         // FK ON DELETE CASCADE on notes(vault_id) takes the rest with it (tags,
-        // properties, links). The contentless FTS5 table is intentionally not
-        // touched here — its 'delete' syntax requires the original column
-        // values, which we don't keep around. Searches join notes_fts with
-        // notes(rowid), so orphaned FTS entries are invisible to queries.
+        // properties, links). FTS rowids are purged by the
+        // notes_fts_purge_after_delete trigger as the cascade fires.
         using var del = Command("DELETE FROM vaults WHERE id = @vaultId", ("@vaultId", vaultId));
         await del.ExecuteNonQueryAsync();
+        foreach (var (id, path) in toEvict)
+        {
+            _pathToId.Remove(path);
+            _idToPath.Remove(id);
+        }
     }
 
     // -------------------------
@@ -163,36 +190,113 @@ public class IndexDb : IDisposable
     {
         using var _ = await AcquireAsync();
         using var tx = _connection.BeginTransaction();
+        var upserted = new List<(string Path, long Id)>();
+
+        // Prepare every command once for the transaction and rebind parameter
+        // values per-note. Creating fresh SqliteCommands inside the loop was
+        // ~10 commands per note × 10k notes = 100k preparations and dominated
+        // cold-scan wall time.
+        using var upsertCmd = _connection.CreateCommand();
+        upsertCmd.Transaction = tx;
+        upsertCmd.CommandText = """
+            INSERT INTO notes (vault_id, path, name, mtime, size)
+            VALUES ($vaultId, $path, $name, $mtime, $size)
+            ON CONFLICT(path) DO UPDATE SET
+                name  = excluded.name,
+                mtime = excluded.mtime,
+                size  = excluded.size
+            RETURNING id
+            """;
+        var pUpVaultId = upsertCmd.Parameters.Add("$vaultId", SqliteType.Integer);
+        var pUpPath    = upsertCmd.Parameters.Add("$path",    SqliteType.Text);
+        var pUpName    = upsertCmd.Parameters.Add("$name",    SqliteType.Text);
+        var pUpMtime   = upsertCmd.Parameters.Add("$mtime",   SqliteType.Integer);
+        var pUpSize    = upsertCmd.Parameters.Add("$size",    SqliteType.Integer);
+        pUpVaultId.Value = vaultId;
+
+        using var delTagsCmd  = PrepareById(tx, "DELETE FROM tags       WHERE note_id   = $id", out var pDelTagsId);
+        using var delPropsCmd = PrepareById(tx, "DELETE FROM properties WHERE note_id   = $id", out var pDelPropsId);
+        using var delLinksCmd = PrepareById(tx, "DELETE FROM links      WHERE source_id = $id", out var pDelLinksId);
+
+        using var insTagCmd = _connection.CreateCommand();
+        insTagCmd.Transaction = tx;
+        insTagCmd.CommandText = "INSERT INTO tags (note_id, tag) VALUES ($noteId, $tag)";
+        var pInsTagNoteId = insTagCmd.Parameters.Add("$noteId", SqliteType.Integer);
+        var pInsTagTag    = insTagCmd.Parameters.Add("$tag",    SqliteType.Text);
+
+        using var insPropCmd = _connection.CreateCommand();
+        insPropCmd.Transaction = tx;
+        insPropCmd.CommandText = "INSERT INTO properties (note_id, key, value) VALUES ($noteId, $key, $value)";
+        var pInsPropNoteId = insPropCmd.Parameters.Add("$noteId", SqliteType.Integer);
+        var pInsPropKey    = insPropCmd.Parameters.Add("$key",    SqliteType.Text);
+        var pInsPropValue  = insPropCmd.Parameters.Add("$value",  SqliteType.Text);
+
+        using var insLinkCmd = _connection.CreateCommand();
+        insLinkCmd.Transaction = tx;
+        insLinkCmd.CommandText = "INSERT INTO links (source_id, target_path) VALUES ($noteId, $target)";
+        var pInsLinkNoteId = insLinkCmd.Parameters.Add("$noteId", SqliteType.Integer);
+        var pInsLinkTarget = insLinkCmd.Parameters.Add("$target", SqliteType.Text);
+
+        using var ftsDelCmd = PrepareById(tx, "INSERT INTO notes_fts(notes_fts, rowid, name, body) VALUES('delete', $id, '', '')", out var pFtsDelId);
+
+        using var ftsInsCmd = _connection.CreateCommand();
+        ftsInsCmd.Transaction = tx;
+        ftsInsCmd.CommandText = "INSERT INTO notes_fts (rowid, name, body) VALUES ($id, $name, $body)";
+        var pFtsInsId   = ftsInsCmd.Parameters.Add("$id",   SqliteType.Integer);
+        var pFtsInsName = ftsInsCmd.Parameters.Add("$name", SqliteType.Text);
+        var pFtsInsBody = ftsInsCmd.Parameters.Add("$body", SqliteType.Text);
+
         try
         {
             foreach (var note in notes)
             {
                 var name = Path.GetFileNameWithoutExtension(note.Path);
 
-                using var cmd = _connection.CreateCommand();
-                cmd.Transaction = tx;
-                cmd.CommandText = """
-                    INSERT INTO notes (vault_id, path, name, mtime, size)
-                    VALUES (@vaultId, @path, @name, @mtime, @size)
-                    ON CONFLICT(path) DO UPDATE SET
-                        name  = excluded.name,
-                        mtime = excluded.mtime,
-                        size  = excluded.size
-                    RETURNING id
-                    """;
-                cmd.Parameters.AddWithValue("@vaultId", vaultId);
-                cmd.Parameters.AddWithValue("@path", note.Path);
-                cmd.Parameters.AddWithValue("@name", name);
-                cmd.Parameters.AddWithValue("@mtime", note.Mtime);
-                cmd.Parameters.AddWithValue("@size", note.Size);
+                pUpPath.Value  = note.Path;
+                pUpName.Value  = name;
+                pUpMtime.Value = note.Mtime;
+                pUpSize.Value  = note.Size;
+                var noteId = (long)(await upsertCmd.ExecuteScalarAsync())!;
+                upserted.Add((note.Path, noteId));
 
-                var noteId = (long)(await cmd.ExecuteScalarAsync())!;
+                pDelTagsId.Value  = noteId;
+                pDelPropsId.Value = noteId;
+                pDelLinksId.Value = noteId;
+                await delTagsCmd.ExecuteNonQueryAsync();
+                await delPropsCmd.ExecuteNonQueryAsync();
+                await delLinksCmd.ExecuteNonQueryAsync();
 
-                await DeleteNoteChildrenAsync(noteId, tx);
-                await InsertTagsAsync(noteId, note.Tags, tx);
-                await InsertPropertiesAsync(noteId, note.Frontmatter, tx);
-                await InsertLinksAsync(noteId, note.OutgoingLinks, tx);
-                await UpsertFtsAsync(noteId, name, note.Content, tx);
+                pInsTagNoteId.Value = noteId;
+                foreach (var tag in note.Tags)
+                {
+                    pInsTagTag.Value = tag;
+                    await insTagCmd.ExecuteNonQueryAsync();
+                }
+
+                pInsPropNoteId.Value = noteId;
+                foreach (var (key, value) in note.Frontmatter)
+                {
+                    pInsPropKey.Value   = key;
+                    pInsPropValue.Value = value?.ToString() ?? "";
+                    await insPropCmd.ExecuteNonQueryAsync();
+                }
+
+                pInsLinkNoteId.Value = noteId;
+                foreach (var link in note.OutgoingLinks)
+                {
+                    pInsLinkTarget.Value = link;
+                    await insLinkCmd.ExecuteNonQueryAsync();
+                }
+
+                // Contentless FTS doesn't support UPDATE — delete then insert.
+                pFtsDelId.Value = noteId;
+                try { await ftsDelCmd.ExecuteNonQueryAsync(); }
+                catch (SqliteException) { /* row not in FTS yet — first insert */ }
+
+                pFtsInsId.Value   = noteId;
+                pFtsInsName.Value = name;
+                pFtsInsBody.Value = note.Content;
+                await ftsInsCmd.ExecuteNonQueryAsync();
             }
 
             tx.Commit();
@@ -202,12 +306,27 @@ public class IndexDb : IDisposable
             tx.Rollback();
             throw;
         }
+        foreach (var (path, id) in upserted)
+        {
+            _pathToId[path] = id;
+            _idToPath[id] = path;
+        }
+    }
+
+    private SqliteCommand PrepareById(SqliteTransaction tx, string sql, out SqliteParameter idParam)
+    {
+        var cmd = _connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = sql;
+        idParam = cmd.Parameters.Add("$id", SqliteType.Integer);
+        return cmd;
     }
 
     public async Task DeleteNoteAsync(string path)
     {
         using var _ = await AcquireAsync();
         using var tx = _connection.BeginTransaction();
+        long? deletedId = null;
         try
         {
             using var idCmd = _connection.CreateCommand();
@@ -215,15 +334,9 @@ public class IndexDb : IDisposable
             idCmd.CommandText = "SELECT id FROM notes WHERE path = @path";
             idCmd.Parameters.AddWithValue("@path", path);
             var idObj = await idCmd.ExecuteScalarAsync();
-            if (idObj is long id)
-            {
-                using var ftsCmd = _connection.CreateCommand();
-                ftsCmd.Transaction = tx;
-                ftsCmd.CommandText = "INSERT INTO notes_fts(notes_fts, rowid, name, body) VALUES('delete', @id, '', '')";
-                ftsCmd.Parameters.AddWithValue("@id", id);
-                await ftsCmd.ExecuteNonQueryAsync();
-            }
+            if (idObj is long id) deletedId = id;
 
+            // FTS purge happens via the notes_fts_purge_after_delete trigger.
             using var del = _connection.CreateCommand();
             del.Transaction = tx;
             del.CommandText = "DELETE FROM notes WHERE path = @path";
@@ -236,6 +349,11 @@ public class IndexDb : IDisposable
         {
             tx.Rollback();
             throw;
+        }
+        if (deletedId.HasValue)
+        {
+            _pathToId.Remove(path);
+            _idToPath.Remove(deletedId.Value);
         }
     }
 
@@ -354,8 +472,12 @@ public class IndexDb : IDisposable
     {
         try
         {
-            var needle = string.IsNullOrWhiteSpace(query) ? null : StripFtsOperators(query);
+            var terms = string.IsNullOrWhiteSpace(query)
+                ? new List<string>()
+                : ExtractSearchTerms(query!);
             string? firstBodyLine = null;
+            string? bestLine = null;
+            var bestScore = 0;
             // Skip a YAML frontmatter block when picking the fallback line —
             // otherwise filter-only searches show "---" as the snippet.
             var inFrontmatter = false;
@@ -375,24 +497,70 @@ public class IndexDb : IDisposable
                     continue;
                 }
                 if (trimmed.Length == 0) continue;
-                firstBodyLine ??= trimmed.Length > 200 ? trimmed[..200] + "..." : trimmed;
-                if (needle is not null && trimmed.Contains(needle, StringComparison.OrdinalIgnoreCase))
-                    return trimmed.Length > 200 ? trimmed[..200] + "..." : trimmed;
+                firstBodyLine ??= TrimSnippet(trimmed);
+
+                if (terms.Count == 0) continue;
+                var score = 0;
+                foreach (var term in terms)
+                    if (trimmed.Contains(term, StringComparison.OrdinalIgnoreCase))
+                        score++;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestLine = TrimSnippet(trimmed);
+                    if (score == terms.Count) return bestLine; // full match — done
+                }
             }
-            return firstBodyLine ?? "";
+            return bestLine ?? firstBodyLine ?? "";
         }
         catch { return ""; /* file deleted between match and read */ }
     }
 
-    private static string StripFtsOperators(string query)
+    private static string TrimSnippet(string line) =>
+        line.Length > 200 ? string.Concat(line.AsSpan(0, 200), "...") : line;
+
+    // Tokenise an FTS5 query into the bare terms a snippet probe should look
+    // for. Handles "phrase quotes", AND/OR/NOT/NEAR keywords, column:value
+    // qualifiers (column name dropped, value kept), trailing wildcards, and
+    // grouping/affinity punctuation. Best-effort — FTS5 grammar is bigger
+    // than this, but covers the common cases.
+    private static List<string> ExtractSearchTerms(string query)
     {
-        // Pull the first bareword out of an FTS query for the snippet probe.
-        var span = query.AsSpan().Trim();
-        var start = 0;
-        while (start < span.Length && !char.IsLetterOrDigit(span[start])) start++;
-        var end = start;
-        while (end < span.Length && (char.IsLetterOrDigit(span[end]) || span[end] == '_')) end++;
-        return start == end ? "" : span[start..end].ToString();
+        var terms = new List<string>();
+        var i = 0;
+        while (i < query.Length)
+        {
+            var c = query[i];
+            if (char.IsWhiteSpace(c) || c is '(' or ')' or '+' or '-' or '^' or ',')
+            {
+                i++;
+                continue;
+            }
+            if (c == '"')
+            {
+                var end = query.IndexOf('"', i + 1);
+                if (end < 0) break;
+                var phrase = query.Substring(i + 1, end - i - 1).Trim();
+                if (phrase.Length > 0) terms.Add(phrase);
+                i = end + 1;
+                continue;
+            }
+            var start = i;
+            while (i < query.Length && (char.IsLetterOrDigit(query[i]) || query[i] is '_' or '*'))
+                i++;
+            if (start == i) { i++; continue; }
+            // `column:` qualifier — drop the column name; the value is parsed next iteration.
+            if (i < query.Length && query[i] == ':')
+            {
+                i++;
+                continue;
+            }
+            var token = query.Substring(start, i - start);
+            if (token is "AND" or "OR" or "NOT" or "NEAR") continue;
+            while (token.EndsWith('*')) token = token[..^1];
+            if (token.Length > 0) terms.Add(token);
+        }
+        return terms;
     }
 
     // -------------------------
@@ -483,9 +651,33 @@ public class IndexDb : IDisposable
     public async Task<long?> GetNoteIdAsync(string path)
     {
         using var _ = await AcquireAsync();
+        if (_pathToId.TryGetValue(path, out var cached))
+            return cached;
         using var cmd = Command("SELECT id FROM notes WHERE path = @path", ("@path", path));
         var result = await cmd.ExecuteScalarAsync();
-        return result is long id ? id : null;
+        if (result is long id)
+        {
+            _pathToId[path] = id;
+            _idToPath[id] = path;
+            return id;
+        }
+        return null;
+    }
+
+    public async Task<string?> GetNotePathByIdAsync(long id)
+    {
+        using var _ = await AcquireAsync();
+        if (_idToPath.TryGetValue(id, out var cached))
+            return cached;
+        using var cmd = Command("SELECT path FROM notes WHERE id = @id", ("@id", id));
+        var result = await cmd.ExecuteScalarAsync();
+        if (result is string path)
+        {
+            _idToPath[id] = path;
+            _pathToId[path] = id;
+            return path;
+        }
+        return null;
     }
 
     public async Task<List<string>> GetNotePathsByNameAsync(long vaultId, string name)
@@ -530,82 +722,6 @@ public class IndexDb : IDisposable
     // -------------------------
     // Private helpers
     // -------------------------
-
-    private async Task DeleteNoteChildrenAsync(long noteId, SqliteTransaction tx)
-    {
-        foreach (var sql in new[]
-        {
-            "DELETE FROM tags       WHERE note_id = @id",
-            "DELETE FROM properties WHERE note_id = @id",
-            "DELETE FROM links      WHERE source_id = @id",
-        })
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = sql;
-            cmd.Parameters.AddWithValue("@id", noteId);
-            await cmd.ExecuteNonQueryAsync();
-        }
-    }
-
-    private async Task InsertTagsAsync(long noteId, List<string> tags, SqliteTransaction tx)
-    {
-        foreach (var tag in tags)
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = "INSERT INTO tags (note_id, tag) VALUES (@noteId, @tag)";
-            cmd.Parameters.AddWithValue("@noteId", noteId);
-            cmd.Parameters.AddWithValue("@tag", tag);
-            await cmd.ExecuteNonQueryAsync();
-        }
-    }
-
-    private async Task InsertPropertiesAsync(long noteId, Dictionary<string, object> props, SqliteTransaction tx)
-    {
-        foreach (var (key, value) in props)
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = "INSERT INTO properties (note_id, key, value) VALUES (@noteId, @key, @value)";
-            cmd.Parameters.AddWithValue("@noteId", noteId);
-            cmd.Parameters.AddWithValue("@key", key);
-            cmd.Parameters.AddWithValue("@value", value?.ToString() ?? "");
-            await cmd.ExecuteNonQueryAsync();
-        }
-    }
-
-    private async Task InsertLinksAsync(long noteId, List<string> links, SqliteTransaction tx)
-    {
-        foreach (var link in links)
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = "INSERT INTO links (source_id, target_path) VALUES (@noteId, @target)";
-            cmd.Parameters.AddWithValue("@noteId", noteId);
-            cmd.Parameters.AddWithValue("@target", link);
-            await cmd.ExecuteNonQueryAsync();
-        }
-    }
-
-    private async Task UpsertFtsAsync(long noteId, string name, string body, SqliteTransaction tx)
-    {
-        // Contentless FTS doesn't support UPDATE — delete then insert keyed by rowid = notes.id.
-        using var del = _connection.CreateCommand();
-        del.Transaction = tx;
-        del.CommandText = "INSERT INTO notes_fts(notes_fts, rowid, name, body) VALUES('delete', @id, '', '')";
-        del.Parameters.AddWithValue("@id", noteId);
-        try { await del.ExecuteNonQueryAsync(); }
-        catch (SqliteException) { /* row not in FTS yet — first insert */ }
-
-        using var ins = _connection.CreateCommand();
-        ins.Transaction = tx;
-        ins.CommandText = "INSERT INTO notes_fts (rowid, name, body) VALUES (@id, @name, @body)";
-        ins.Parameters.AddWithValue("@id", noteId);
-        ins.Parameters.AddWithValue("@name", name);
-        ins.Parameters.AddWithValue("@body", body);
-        await ins.ExecuteNonQueryAsync();
-    }
 
     private async Task<IDisposable> AcquireAsync()
     {

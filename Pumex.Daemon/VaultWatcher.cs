@@ -14,7 +14,7 @@ public sealed class VaultWatcher : IDisposable
 
     private FileSystemWatcher? _watcher;
 
-    public void Start(string vaultPath)
+    public void Start(string vaultPath, Action<Exception>? onError = null)
     {
         if (_watcher is not null) throw new InvalidOperationException("Watcher already started");
 
@@ -33,6 +33,14 @@ public sealed class VaultWatcher : IDisposable
         {
             Enqueue(FileEventType.Deleted, e.OldFullPath);
             Enqueue(FileEventType.Created, e.FullPath);
+        };
+        // Vault root deleted/moved/permissions-revoked, or kernel buffer overflow.
+        // Forward the exception, then complete the channel so ReadBatchesAsync
+        // returns cleanly and the IndexingService loop exits without crashing.
+        _watcher.Error += (_, e) =>
+        {
+            onError?.Invoke(e.GetException());
+            _raw.Writer.TryComplete();
         };
 
         _watcher.EnableRaisingEvents = true;

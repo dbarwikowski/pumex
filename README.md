@@ -12,9 +12,9 @@ Early v0.1. The happy path works end-to-end:
 - Full-text search (FTS5), tag listing, wikilink backlinks
 - Note CRUD over a named-pipe IPC layer
 - Self-contained single-file binaries for Windows, Linux, macOS (x64 + arm64)
-- 74 unit + integration tests, BenchmarkDotNet suite for the perf-critical paths
+- 112 unit + integration tests, BenchmarkDotNet suite for the perf-critical paths
 
-Not yet shipped: plugin SDK, IPC auth, daily-note / property handlers, name-based note ops. See `pumex --help` for the current command surface.
+Not yet shipped: plugin SDK, IPC auth. See `pumex --help` for the current command surface.
 
 ## Install
 
@@ -77,6 +77,14 @@ Every read command auto-discovers the vault you're in by walking up from the cur
 | `pumex note read <path> [--raw]` | Read note (parsed frontmatter + body, or raw) |
 | `pumex note create <path> [--content TEXT \| --stdin]` | Write a new note |
 | `pumex note append <path> [--content TEXT \| --stdin] [--inline]` | Append to an existing note |
+| `pumex note delete <path>` | Delete a note |
+| `pumex note list` | List all notes in the vault |
+| `pumex property list <path>` | List all frontmatter properties on a note |
+| `pumex property get <path> <key>` | Read a single frontmatter property |
+| `pumex property set <path> <key> <value>` | Write a frontmatter property |
+| `pumex daily [read] [--date YYYY-MM-DD]` | Read today's (or a given) daily note |
+| `pumex daily append [--content TEXT \| --stdin] [--date YYYY-MM-DD]` | Append to a daily note |
+| `pumex vault remove <name>` | Unregister a vault |
 | `pumex daemon <status\|install\|uninstall\|restart>` | Manage the platform-native daemon service |
 
 All commands accept `--vault NAME`, `--vault-path PATH`, or `--all` to override auto-discovery.
@@ -102,12 +110,14 @@ Targets for a 10 000-file vault, measured with BenchmarkDotNet (`tests/Pumex.Ben
 
 | Operation | Budget | Measured @ 10k |
 |---|---:|---:|
-| Cold full scan | 2–5 s | 6.1 s |
+| Cold full scan | 2–5 s | ~5 s ¹ |
 | Warm full scan (mtime-only) | ~200 ms | 138 ms |
 | FTS search | <50 ms | ~20 ms |
 | Incremental update (per file event) | <10 ms | 3.3 ms |
 
 Run them yourself: `dotnet run -c Release --project tests/Pumex.Benchmarks`.
+
+¹ Reduced from 6.1 s after eliminating ~100k `SqliteCommand` re-preparations per scan via command reuse across the upsert transaction.
 
 ## Contributing
 
