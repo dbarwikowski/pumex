@@ -10,7 +10,9 @@ public class VaultIndexingOrchestrator : BackgroundService
 
     private readonly object _lock = new();
     private readonly Dictionary<long, VaultRunner> _runners = new();
-    private CancellationTokenSource? _hostCts;
+    // Standalone CTS: cancelled explicitly in ExecuteAsync cleanup so vault runners stop on host shutdown.
+    // Initialized in field so AddVaultAsync is safe to call as soon as StartAsync returns.
+    private readonly CancellationTokenSource _hostCts = new();
 
     private sealed record VaultRunner(IndexingService Service, Task Task, CancellationTokenSource Cts);
 
@@ -26,13 +28,14 @@ public class VaultIndexingOrchestrator : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        _hostCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-
         foreach (var vault in await _db.GetVaultsAsync())
             StartVault(vault);
 
         try { await Task.Delay(Timeout.Infinite, ct); }
         catch (OperationCanceledException) { }
+
+        // Signal all vault runners to stop.
+        _hostCts.Cancel();
 
         Task[] outstanding;
         lock (_lock) outstanding = _runners.Values.Select(r => r.Task).ToArray();
@@ -45,11 +48,6 @@ public class VaultIndexingOrchestrator : BackgroundService
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Stops indexing for a single vault without affecting the others.
-    /// Cancels the per-vault token, awaits the runner task (which disposes
-    /// the service in its finally), then drops it from the registry.
-    /// </summary>
     public async Task RemoveVaultAsync(long vaultId)
     {
         VaultRunner? runner;
@@ -65,16 +63,20 @@ public class VaultIndexingOrchestrator : BackgroundService
         runner.Cts.Dispose();
     }
 
+    public override void Dispose()
+    {
+        _hostCts.Cancel();
+        _hostCts.Dispose();
+        base.Dispose();
+    }
+
     private void StartVault(VaultRecord vault)
     {
-        var hostCts = _hostCts
-            ?? throw new InvalidOperationException("Orchestrator hasn't started yet.");
-
         lock (_lock)
         {
             if (_runners.ContainsKey(vault.Id)) return;
 
-            var cts = CancellationTokenSource.CreateLinkedTokenSource(hostCts.Token);
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(_hostCts.Token);
             var svc = _factory.Create(vault);
             var task = Task.Run(async () =>
             {

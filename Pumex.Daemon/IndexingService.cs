@@ -33,6 +33,24 @@ public sealed class IndexingService : IDisposable
     {
         _logger.LogInformation("Vault {Name} ({Path}): starting full scan", _vault.Name, _vault.Path);
 
+        if (!Directory.Exists(_vault.Path))
+        {
+            _logger.LogWarning("Vault {Name}: path {Path} does not exist; skipping indexing", _vault.Name, _vault.Path);
+            return;
+        }
+
+        // Start the watcher before the full scan so no events are missed during the scan window.
+        try
+        {
+            _watcher.Start(_vault.Path, ex =>
+                _logger.LogWarning(ex, "Vault {Name}: watcher error; stopping watch loop", _vault.Name));
+        }
+        catch (Exception ex) when (ex is ArgumentException or FileNotFoundException or DirectoryNotFoundException)
+        {
+            _logger.LogWarning(ex, "Vault {Name}: cannot start watcher on {Path}", _vault.Name, _vault.Path);
+            return;
+        }
+
         await FullScanAsync(ct);
 
         var allPaths = await _db.GetAllPathsAsync(_vault.Id);
@@ -40,8 +58,6 @@ public sealed class IndexingService : IDisposable
         await ResolvePendingLinksAsync(ct);
 
         _logger.LogInformation("Vault {Name}: scan complete, {Count} notes", _vault.Name, allPaths.Count);
-
-        _watcher.Start(_vault.Path);
 
         await foreach (var batch in _watcher.ReadBatchesAsync(ct))
         {
@@ -59,24 +75,40 @@ public sealed class IndexingService : IDisposable
         var indexed = await _db.GetAllMtimesAsync(_vault.Id);
         var batch = new List<string>(50);
 
-        foreach (var file in Directory.EnumerateFiles(_vault.Path, "*.md", SearchOption.AllDirectories))
+        IEnumerator<string>? enumerator = null;
+        try
         {
-            ct.ThrowIfCancellationRequested();
-
-            var mtime = new DateTimeOffset(File.GetLastWriteTimeUtc(file)).ToUnixTimeSeconds();
-            if (indexed.TryGetValue(file, out var indexedMtime))
+            enumerator = Directory.EnumerateFiles(_vault.Path, "*.md", SearchOption.AllDirectories).GetEnumerator();
+            while (true)
             {
-                indexed.Remove(file);
-                if (mtime == indexedMtime) continue;
-            }
+                bool moved;
+                try { moved = enumerator.MoveNext(); }
+                catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException)
+                {
+                    _logger.LogWarning(ex, "Vault {Name}: directory enumeration interrupted; aborting full scan", _vault.Name);
+                    return;
+                }
+                if (!moved) break;
 
-            batch.Add(file);
-            if (batch.Count >= 50)
-            {
-                await IndexBatchAsync(batch);
-                batch.Clear();
+                ct.ThrowIfCancellationRequested();
+                var file = enumerator.Current;
+
+                var mtime = new DateTimeOffset(File.GetLastWriteTimeUtc(file)).ToUnixTimeSeconds();
+                if (indexed.TryGetValue(file, out var indexedMtime))
+                {
+                    indexed.Remove(file);
+                    if (mtime == indexedMtime) continue;
+                }
+
+                batch.Add(file);
+                if (batch.Count >= 50)
+                {
+                    await IndexBatchAsync(batch);
+                    batch.Clear();
+                }
             }
         }
+        finally { enumerator?.Dispose(); }
 
         if (batch.Count > 0)
             await IndexBatchAsync(batch);
