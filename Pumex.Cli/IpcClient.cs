@@ -16,7 +16,7 @@ public class IpcClient
     {
         await using var pipe = new NamedPipeClientStream(
             ".",
-            IpcResponse.PipeName,
+            PumexPaths.PipeName,
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
 

@@ -2,9 +2,21 @@ namespace Pumex.Contracts;
 
 public static class PumexPaths
 {
-    public static string Root { get; } = Path.Combine(
+    private static readonly string _defaultRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".pumex");
+
+    public static string Root { get; } =
+        Environment.GetEnvironmentVariable("PUMEX_HOME") ?? _defaultRoot;
+
+    // Default home → canonical pipe name so existing installs need no changes.
+    // Custom home → short hex slug derived from the path so two daemons can
+    // coexist on the same machine without competing for the same pipe.
+    public static string PipeName { get; } = Root == _defaultRoot
+        ? "pumex-daemon"
+        : "pumex-" + Convert.ToHexString(
+              System.Security.Cryptography.SHA256.HashData(
+                  System.Text.Encoding.UTF8.GetBytes(Root)))[..8].ToLowerInvariant();
 
     public static string IndexDb => Path.Combine(Root, "index.db");
     public static string GlobalConfig => Path.Combine(Root, "config.json");

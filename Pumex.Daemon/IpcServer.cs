@@ -21,7 +21,7 @@ public class IpcServer : BackgroundService
     {
         _handlers = handlers.ToDictionary(h => h.Command, StringComparer.OrdinalIgnoreCase);
         _logger = logger;
-        _pipeName = pipeName ?? IpcResponse.PipeName;
+        _pipeName = pipeName ?? PumexPaths.PipeName;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
