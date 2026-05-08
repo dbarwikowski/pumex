@@ -5,10 +5,16 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-Pumex.Daemon-acffe07c-43d8-4cf5-ac9f-fc0f313834c3</UserSecretsId>
+    <!-- pumex-daemon is the user-visible name; matches DaemonInstaller's expectation. -->
+    <AssemblyName>pumex-daemon</AssemblyName>
+    <!-- Embed native libs (SQLite) into the single-file bundle so the published
+         output is genuinely one binary. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.7" />

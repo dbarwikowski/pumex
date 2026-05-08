@@ -1,0 +1,95 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write  # needed to create the GitHub Release and upload assets
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet test --nologo
+
+  release:
+    name: Build and release ${{ matrix.rid }}
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-latest
+            archive: tar.gz
+          - rid: linux-arm64
+            runner: ubuntu-latest
+            archive: tar.gz
+          - rid: osx-x64
+            runner: macos-latest
+            archive: tar.gz
+          - rid: osx-arm64
+            runner: macos-latest
+            archive: tar.gz
+          - rid: win-x64
+            runner: windows-latest
+            archive: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish CLI
+        shell: bash
+        run: |
+          dotnet publish Pumex.Cli -c Release -r ${{ matrix.rid }} \
+            --self-contained -p:PublishSingleFile=true \
+            -o publish/${{ matrix.rid }}
+
+      - name: Publish daemon
+        shell: bash
+        run: |
+          dotnet publish Pumex.Daemon -c Release -r ${{ matrix.rid }} \
+            --self-contained -p:PublishSingleFile=true \
+            -o publish/${{ matrix.rid }}
+
+      # Asset names omit the tag so the install scripts can resolve them via
+      # the GitHub /releases/latest/download/<name> shortcut.
+      - name: Stage binaries (POSIX)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          mkdir -p stage
+          cp publish/${{ matrix.rid }}/pumex stage/
+          cp publish/${{ matrix.rid }}/pumex-daemon stage/
+          chmod +x stage/pumex stage/pumex-daemon
+          tar -czf pumex-${{ matrix.rid }}.tar.gz -C stage .
+
+      - name: Stage binaries (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force stage | Out-Null
+          Copy-Item publish/${{ matrix.rid }}/pumex.exe stage/
+          Copy-Item publish/${{ matrix.rid }}/pumex-daemon.exe stage/
+          Compress-Archive -Path stage/* -DestinationPath "pumex-${{ matrix.rid }}.zip"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            pumex-${{ matrix.rid }}.tar.gz
+            pumex-${{ matrix.rid }}.zip
+          fail_on_unmatched_files: false
+          generate_release_notes: true

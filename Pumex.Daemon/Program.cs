@@ -5,6 +5,10 @@ using Pumex.Contracts;
 using Pumex.Daemon;
 using Pumex.Daemon.Ipc;
 
+// Required for self-contained single-file publish — without this the SQLite
+// native bundle isn't initialised and Microsoft.Data.Sqlite throws on first use.
+SQLitePCL.Batteries.Init();
+
 PumexPaths.EnsureRoot();
 
 var host = Host.CreateDefaultBuilder(args)
