@@ -13,7 +13,7 @@ public class BacklinksHandler : ICommandHandler
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
         var vault = await request.ResolveVaultAsync(_db);
-        var path = IpcRequestExtensions.ResolveNotePath(request.Require("path"), vault);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
         return await _db.GetBacklinksAsync(path, vault?.Id);
     }
 }

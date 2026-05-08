@@ -384,6 +384,17 @@ public class IndexDb : IDisposable
         return result is long id ? id : null;
     }
 
+    public async Task<List<string>> GetNotePathsByNameAsync(long vaultId, string name)
+    {
+        var result = new List<string>();
+        using var cmd = Command(
+            "SELECT path FROM notes WHERE vault_id = @vaultId AND name = @name COLLATE NOCASE",
+            ("@vaultId", vaultId), ("@name", name));
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) result.Add(reader.GetString(0));
+        return result;
+    }
+
     // -------------------------
     // Private helpers
     // -------------------------

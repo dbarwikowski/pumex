@@ -18,7 +18,7 @@ public class NoteReadHandler : ICommandHandler
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
         var vault = await request.ResolveVaultAsync(_db);
-        var path = IpcRequestExtensions.ResolveNotePath(request.Require("path"), vault);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
         if (!File.Exists(path))
             throw new FileNotFoundException($"Note not found: {path}");
 
@@ -38,11 +38,17 @@ public class NoteReadHandler : ICommandHandler
 
 public class NoteCreateHandler : ICommandHandler
 {
+    private readonly IndexDb _db;
+
     public string Command => "note:create";
 
-    public Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
+    public NoteCreateHandler(IndexDb db) => _db = db;
+
+    public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var path = Path.GetFullPath(request.Require("path"));
+        var vault = await request.ResolveVaultAsync(_db);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(
+            request.Require("path"), vault, _db, NoteResolutionMode.Create);
         var content = request.Optional("content") ?? "";
 
         if (File.Exists(path))
@@ -51,31 +57,36 @@ public class NoteCreateHandler : ICommandHandler
         var dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-        File.WriteAllText(path, content);
+        await File.WriteAllTextAsync(path, content, ct);
         // Watcher will pick this up; no need to notify the index synchronously.
-        return Task.FromResult<object?>(new NotePathResult(path));
+        return new NotePathResult(path);
     }
 }
 
 public class NoteAppendHandler : ICommandHandler
 {
+    private readonly IndexDb _db;
+
     public string Command => "note:append";
 
-    public Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
+    public NoteAppendHandler(IndexDb db) => _db = db;
+
+    public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var path = Path.GetFullPath(request.Require("path"));
+        var vault = await request.ResolveVaultAsync(_db);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
         var content = request.Optional("content") ?? "";
         var inline = request.Flag("inline");
 
         if (!File.Exists(path))
             throw new FileNotFoundException($"Note not found: {path}");
 
-        var existing = File.ReadAllText(path);
+        var existing = await File.ReadAllTextAsync(path, ct);
 
         var prefix = (inline || existing.Length == 0 || existing.EndsWith('\n')) ? "" : "\n";
         var suffix = content.EndsWith('\n') ? "" : "\n";
 
-        File.AppendAllText(path, prefix + content + suffix);
-        return Task.FromResult<object?>(new NotePathResult(path));
+        await File.AppendAllTextAsync(path, prefix + content + suffix, ct);
+        return new NotePathResult(path);
     }
 }

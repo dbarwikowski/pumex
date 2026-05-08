@@ -93,13 +93,26 @@ public class VaultScopeTests
     }
 
     [Fact]
-    public void ResolvePath_resolves_against_cwd_for_auto_discovered_scope()
+    public void ResolvePath_passes_bare_names_through_unchanged()
     {
-        // Auto-discovered scope deliberately preserves CWD-relative behavior.
+        // No directory separator → daemon-side lookup by name. CLI must not
+        // canonicalise CWD-relative or the daemon never sees the bare token.
         var scope = new VaultScope(Name: null, Path: "/discovered", IsExplicit: false);
 
-        var resolved = VaultArgs.ResolvePath(scope, "note.md");
+        Assert.Equal("today", VaultArgs.ResolvePath(scope, "today"));
+        Assert.Equal("today.md", VaultArgs.ResolvePath(scope, "today.md"));
+    }
 
-        Assert.Equal(Path.GetFullPath("note.md"), resolved);
+    [Fact]
+    public void ResolvePath_resolves_path_with_separator_against_cwd_for_auto_discovered_scope()
+    {
+        // Auto-discovered scope deliberately preserves CWD-relative behaviour
+        // for path-shaped inputs. (Bare names go through a separate branch
+        // and are passed through to the daemon for index lookup.)
+        var scope = new VaultScope(Name: null, Path: "/discovered", IsExplicit: false);
+
+        var resolved = VaultArgs.ResolvePath(scope, "sub/note.md");
+
+        Assert.Equal(Path.GetFullPath("sub/note.md"), resolved);
     }
 }

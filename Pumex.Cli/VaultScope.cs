@@ -76,16 +76,25 @@ public static class VaultArgs
     }
 
     /// <summary>
-    /// Resolves a user-supplied path before sending it to the daemon.
-    /// Absolute paths pass through canonicalised. Relative paths resolve
-    /// against an explicit <c>--vault-path</c>, otherwise CWD. When the user
-    /// supplied <c>--vault NAME</c> the path is left raw — the daemon knows
-    /// the vault root and will combine there.
+    /// Canonicalises a user-supplied note reference before sending it to the
+    /// daemon. Rules:
+    /// <list type="bullet">
+    ///   <item>Absolute path → canonical absolute.</item>
+    ///   <item>Bare name (no <c>/</c> or <c>\</c>) → passed through raw so the
+    ///     daemon can resolve via the index.</item>
+    ///   <item>Relative path with separators → joined with <c>--vault-path</c>
+    ///     when explicit, left raw under <c>--vault NAME</c> (daemon knows the
+    ///     root), otherwise resolved CWD-relative.</item>
+    /// </list>
     /// </summary>
     public static string ResolvePath(VaultScope scope, string path)
     {
         if (System.IO.Path.IsPathFullyQualified(path))
             return System.IO.Path.GetFullPath(path);
+
+        var hasSeparator = path.Contains('/') || path.Contains('\\');
+        if (!hasSeparator) return path;
+
         if (scope.IsExplicit && scope.Name is not null && scope.Path is null)
             return path;
         var root = scope.RelativeRoot;

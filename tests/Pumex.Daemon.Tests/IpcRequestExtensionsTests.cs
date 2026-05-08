@@ -50,27 +50,110 @@ public class IpcRequestExtensionsTests
     }
 
     [Fact]
-    public void ResolveNotePath_returns_canonical_absolute_path_unchanged()
+    public async Task ResolveNotePathAsync_returns_canonical_absolute_path_unchanged()
     {
-        // Pick a path the OS can canonicalise without touching disk.
+        using var fixture = new IndexDbFixture();
         var raw = OperatingSystem.IsWindows() ? @"C:\foo\..\bar\note.md" : "/foo/../bar/note.md";
         var expected = Path.GetFullPath(raw);
 
-        var resolved = IpcRequestExtensions.ResolveNotePath(raw, vault: null);
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync(raw, vault: null, fixture.Db);
 
         Assert.Equal(expected, resolved);
     }
 
     [Fact]
-    public void ResolveNotePath_joins_relative_against_vault_root_when_vault_in_scope()
+    public async Task ResolveNotePathAsync_joins_relative_against_vault_root_when_vault_in_scope()
     {
+        using var fixture = new IndexDbFixture();
         var vault = new VaultRecord(Id: 1, Name: "v", Path: OperatingSystem.IsWindows() ? @"C:\vault" : "/vault");
 
-        var resolved = IpcRequestExtensions.ResolveNotePath("sub/note.md", vault);
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("sub/note.md", vault, fixture.Db);
 
         var expected = Path.GetFullPath(Path.Combine(vault.Path, "sub/note.md"));
         Assert.Equal(expected, resolved);
     }
+
+    [Fact]
+    public async Task ResolveNotePathAsync_bare_name_resolves_via_index_when_unique()
+    {
+        using var fixture = new IndexDbFixture();
+        var vaultId = await fixture.Db.AddVaultAsync("alpha", "/alpha");
+        var vault = (await fixture.Db.GetVaultByPathAsync("/alpha"))!;
+        await fixture.Db.UpsertNotesAsync(vaultId, [Note("/alpha/today.md")]);
+
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("today", vault, fixture.Db);
+
+        Assert.Equal("/alpha/today.md", resolved);
+    }
+
+    [Fact]
+    public async Task ResolveNotePathAsync_strips_md_suffix_before_lookup()
+    {
+        using var fixture = new IndexDbFixture();
+        var vaultId = await fixture.Db.AddVaultAsync("v", "/v");
+        var vault = (await fixture.Db.GetVaultByPathAsync("/v"))!;
+        await fixture.Db.UpsertNotesAsync(vaultId, [Note("/v/today.md")]);
+
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("today.md", vault, fixture.Db);
+
+        Assert.Equal("/v/today.md", resolved);
+    }
+
+    [Fact]
+    public async Task ResolveNotePathAsync_throws_when_name_has_no_match()
+    {
+        using var fixture = new IndexDbFixture();
+        await fixture.Db.AddVaultAsync("v", "/v");
+        var vault = (await fixture.Db.GetVaultByPathAsync("/v"))!;
+
+        await Assert.ThrowsAsync<FileNotFoundException>(
+            async () => await IpcRequestExtensions.ResolveNotePathAsync("ghost", vault, fixture.Db));
+    }
+
+    [Fact]
+    public async Task ResolveNotePathAsync_throws_when_name_is_ambiguous()
+    {
+        using var fixture = new IndexDbFixture();
+        var vaultId = await fixture.Db.AddVaultAsync("v", "/v");
+        var vault = (await fixture.Db.GetVaultByPathAsync("/v"))!;
+        await fixture.Db.UpsertNotesAsync(vaultId, [
+            Note("/v/a/shared.md"),
+            Note("/v/b/shared.md"),
+        ]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await IpcRequestExtensions.ResolveNotePathAsync("shared", vault, fixture.Db));
+    }
+
+    [Fact]
+    public async Task ResolveNotePathAsync_throws_when_bare_name_has_no_vault_in_scope()
+    {
+        using var fixture = new IndexDbFixture();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            async () => await IpcRequestExtensions.ResolveNotePathAsync("today", vault: null, fixture.Db));
+    }
+
+    [Fact]
+    public async Task ResolveNotePathAsync_create_mode_generates_path_inside_vault_root_without_db_lookup()
+    {
+        using var fixture = new IndexDbFixture();
+        var vault = new VaultRecord(Id: 1, Name: "v", Path: OperatingSystem.IsWindows() ? @"C:\v" : "/v");
+
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("brand-new", vault, fixture.Db, NoteResolutionMode.Create);
+
+        Assert.Equal(Path.GetFullPath(Path.Combine(vault.Path, "brand-new.md")), resolved);
+    }
+
+    private static NoteDocument Note(string path) => new(
+        Path: path,
+        Frontmatter: new Dictionary<string, object>(),
+        Tags: [],
+        OutgoingLinks: [],
+        Content: "",
+        RawContent: "",
+        Mtime: 1,
+        Size: 0);
 
     [Fact]
     public async Task ResolveVaultAsync_returns_null_when_no_vault_args_supplied()

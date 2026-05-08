@@ -53,14 +53,17 @@ static void PrintUsage()
     AnsiConsole.WriteLine("  pumex new <name> [path]");
     AnsiConsole.WriteLine("  pumex search <query> [--limit N] [--vault NAME | --vault-path PATH | --all]");
     AnsiConsole.WriteLine("  pumex tags [--vault NAME | --vault-path PATH | --all]");
-    AnsiConsole.WriteLine("  pumex backlinks <path> [--vault NAME | --vault-path PATH | --all]");
+    AnsiConsole.WriteLine("  pumex backlinks <path-or-name> [--vault NAME | --vault-path PATH | --all]");
     AnsiConsole.WriteLine("  pumex vaults");
     AnsiConsole.WriteLine("  pumex vault add <name> <path>");
-    AnsiConsole.WriteLine("  pumex note read <path> [--raw] [--vault NAME | --vault-path PATH]");
-    AnsiConsole.WriteLine("  pumex note create <path> [--content TEXT | --stdin]");
-    AnsiConsole.WriteLine("  pumex note append <path> [--content TEXT | --stdin] [--inline]");
+    AnsiConsole.WriteLine("  pumex note read <path-or-name> [--raw] [--vault NAME | --vault-path PATH]");
+    AnsiConsole.WriteLine("  pumex note create <path-or-name> [--content TEXT | --stdin] [--vault NAME | --vault-path PATH]");
+    AnsiConsole.WriteLine("  pumex note append <path-or-name> [--content TEXT | --stdin] [--inline] [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex daemon <status|install|uninstall|restart> [--daemon-path PATH]");
     AnsiConsole.WriteLine();
     AnsiConsole.WriteLine("Commands that operate on vault contents default to the vault containing the");
     AnsiConsole.WriteLine("current directory. Use --vault, --vault-path, or --all to override.");
+    AnsiConsole.WriteLine();
+    AnsiConsole.WriteLine("A bare name (e.g. 'today') resolves to the matching note in the vault index.");
+    AnsiConsole.WriteLine("Use a path with separators (e.g. 'sub/today.md') for path-based addressing.");
 }

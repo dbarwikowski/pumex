@@ -61,6 +61,33 @@ public class IpcServerTests
         Assert.Equal(note.Path, resp.Data![0].Path);
     }
 
+    [Fact]
+    public async Task Note_read_resolves_bare_name_via_the_index()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        // Two notes — the bare name "today" must pick the right one.
+        var todayPath = fixture.WriteNote("today.md", "# today\n\nhello world\n");
+        fixture.WriteNote("yesterday.md", "# yesterday\n");
+        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [
+            ParseFrom(todayPath),
+            ParseFrom(Path.Combine(fixture.Root, "yesterday.md")),
+        ]);
+
+        await using var run = await IpcServerRun.StartAsync(
+            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Db)));
+
+        var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
+        {
+            ["path"] = "today",                // bare name, no separator, no extension
+            ["vaultPath"] = fixture.Vault.Path,
+        });
+
+        Assert.True(resp.Success, resp.Error);
+        Assert.Equal(todayPath, resp.Data!.Path);
+    }
+
+    private static NoteDocument ParseFrom(string path) => new NoteParser().Parse(path);
+
     private sealed class IpcServerRun : IAsyncDisposable
     {
         public TestIpcClient Client { get; }

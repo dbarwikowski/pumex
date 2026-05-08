@@ -254,17 +254,18 @@ public static class Commands
 
     private static async Task<int> NoteWriteAsync(IpcClient client, string[] args, string command)
     {
-        if (args.Length == 0) return Usage($"pumex note {command[5..]} <path> [--content TEXT | --stdin] [--inline]");
+        var (scope, rest) = VaultArgs.Extract(args);
+        if (rest.Length == 0) return Usage($"pumex note {command[5..]} <path-or-name> [--content TEXT | --stdin] [--inline] [--vault NAME]");
 
-        var path = Path.GetFullPath(args[0]);
+        var path = VaultArgs.ResolvePath(scope, rest[0]);
         string? content = null;
         var inline = false;
-        for (var i = 1; i < args.Length; i++)
+        for (var i = 1; i < rest.Length; i++)
         {
-            switch (args[i])
+            switch (rest[i])
             {
-                case "--content" when i + 1 < args.Length:
-                    content = args[++i];
+                case "--content" when i + 1 < rest.Length:
+                    content = rest[++i];
                     break;
                 case "--stdin":
                     content = await Console.In.ReadToEndAsync();
@@ -287,6 +288,7 @@ public static class Commands
             ["path"] = path,
             ["content"] = content,
         };
+        scope.ApplyTo(requestArgs);
         if (inline) requestArgs["inline"] = "true";
 
         var resp = await client.SendAsync<NotePathResult>(command, requestArgs);

@@ -184,6 +184,40 @@ public class IndexDbTests : IDisposable
     }
 
     [Fact]
+    public async Task GetNotePathsByNameAsync_returns_only_matches_in_the_given_vault()
+    {
+        var aId = await _db.AddVaultAsync("alpha", "/alpha");
+        var bId = await _db.AddVaultAsync("beta",  "/beta");
+        await _db.UpsertNotesAsync(aId, new[]
+        {
+            MakeNote("/alpha/today.md"),
+            MakeNote("/alpha/folder/notes-on-today.md"),
+        });
+        await _db.UpsertNotesAsync(bId, new[] { MakeNote("/beta/today.md") });
+
+        var alpha = await _db.GetNotePathsByNameAsync(aId, "today");
+        var beta  = await _db.GetNotePathsByNameAsync(bId, "today");
+
+        Assert.Single(alpha);
+        Assert.Single(beta);
+        Assert.Equal("/alpha/today.md", alpha[0]);
+        Assert.Equal("/beta/today.md",  beta[0]);
+    }
+
+    [Fact]
+    public async Task GetNotePathsByNameAsync_is_case_insensitive()
+    {
+        var vaultId = await _db.AddVaultAsync("v", "/v");
+        await _db.UpsertNotesAsync(vaultId, new[] { MakeNote("/v/Mixed-Case.md") });
+
+        var lower = await _db.GetNotePathsByNameAsync(vaultId, "mixed-case");
+        var upper = await _db.GetNotePathsByNameAsync(vaultId, "MIXED-CASE");
+
+        Assert.Single(lower);
+        Assert.Single(upper);
+    }
+
+    [Fact]
     public async Task GetUnresolvedLinksAsync_returns_only_unresolved_links_for_the_vault()
     {
         var aId = await _db.AddVaultAsync("alpha", "/alpha");
