@@ -100,6 +100,75 @@ public class IndexDbTests : IDisposable
     }
 
     [Fact]
+    public async Task SearchAsync_filters_by_required_tag()
+    {
+        var vaultId = await _db.AddVaultAsync("v", "/v");
+        await _db.UpsertNotesAsync(vaultId, new[]
+        {
+            MakeNote("/v/tagged.md",   body: "shared keyword zebrafinch", tags: ["work"]),
+            MakeNote("/v/untagged.md", body: "shared keyword zebrafinch"),
+        });
+
+        var hits = await _db.SearchAsync("zebrafinch", vaultId: vaultId, tags: new[] { "work" });
+
+        Assert.Single(hits);
+        Assert.Equal("/v/tagged.md", hits[0].Path);
+    }
+
+    [Fact]
+    public async Task SearchAsync_with_multiple_tags_requires_all_of_them()
+    {
+        var vaultId = await _db.AddVaultAsync("v", "/v");
+        await _db.UpsertNotesAsync(vaultId, new[]
+        {
+            MakeNote("/v/both.md",    body: "z", tags: ["work", "urgent"]),
+            MakeNote("/v/oneonly.md", body: "z", tags: ["work"]),
+        });
+
+        var hits = await _db.SearchAsync("z", vaultId: vaultId, tags: new[] { "work", "urgent" });
+
+        Assert.Single(hits);
+        Assert.Equal("/v/both.md", hits[0].Path);
+    }
+
+    [Fact]
+    public async Task SearchAsync_filters_by_property_key_and_value()
+    {
+        var vaultId = await _db.AddVaultAsync("v", "/v");
+        await _db.UpsertNotesAsync(vaultId, new[]
+        {
+            MakeNote("/v/draft.md",     body: "z", frontmatter: new() { ["status"] = "draft"     }),
+            MakeNote("/v/published.md", body: "z", frontmatter: new() { ["status"] = "published" }),
+        });
+
+        var hits = await _db.SearchAsync(
+            "z",
+            vaultId: vaultId,
+            properties: new[] { new KeyValuePair<string, string>("status", "draft") });
+
+        Assert.Single(hits);
+        Assert.Equal("/v/draft.md", hits[0].Path);
+    }
+
+    [Fact]
+    public async Task SearchAsync_works_without_a_query_returning_filtered_notes()
+    {
+        var vaultId = await _db.AddVaultAsync("v", "/v");
+        await _db.UpsertNotesAsync(vaultId, new[]
+        {
+            MakeNote("/v/a.md", tags: ["work"]) with { Mtime = 200 },
+            MakeNote("/v/b.md", tags: ["work"]) with { Mtime = 100 },
+            MakeNote("/v/c.md", tags: ["other"]),
+        });
+
+        var hits = await _db.SearchAsync(query: null, vaultId: vaultId, tags: new[] { "work" });
+
+        Assert.Equal(2, hits.Count);
+        Assert.Equal("/v/a.md", hits[0].Path);   // newer first
+        Assert.Equal("/v/b.md", hits[1].Path);
+    }
+
+    [Fact]
     public async Task SearchAsync_scopes_to_vault_when_id_is_supplied()
     {
         var aId = await _db.AddVaultAsync("alpha", "/alpha");

@@ -269,35 +269,76 @@ public class IndexDb : IDisposable
     // Search
     // -------------------------
 
-    public async Task<List<SearchResult>> SearchAsync(string query, int limit = 50, long? vaultId = null)
+    public async Task<List<SearchResult>> SearchAsync(
+        string? query,
+        int limit = 50,
+        long? vaultId = null,
+        IReadOnlyList<string>? tags = null,
+        IReadOnlyList<KeyValuePair<string, string>>? properties = null)
     {
-        // Contentless FTS — get matching note paths, then build snippets from
-        // disk in C#. Best-effort substring match against the raw query string;
-        // works fine for plain queries, degrades for complex FTS expressions.
+        // Build SQL incrementally: FTS join only when query is non-empty,
+        // optional vault scope, AND-semantics tag and property filters.
+        // Snippet builder gets the original query (or null) and falls back to
+        // the first non-empty body line when there's nothing to substring-match.
         using var _ = await AcquireAsync();
-        var matches = new List<(string Path, string Name)>();
-        var sql = vaultId is null
-            ? """
+
+        var hasQuery = !string.IsNullOrWhiteSpace(query);
+        var sql = new System.Text.StringBuilder();
+        var parameters = new List<(string, object)>();
+
+        if (hasQuery)
+        {
+            sql.Append("""
                 SELECT n.path, n.name
                 FROM notes_fts
                 JOIN notes n ON n.id = notes_fts.rowid
                 WHERE notes_fts MATCH @query
-                ORDER BY rank
-                LIMIT @limit
-                """
-            : """
+                """);
+            parameters.Add(("@query", query!));
+        }
+        else
+        {
+            sql.Append("""
                 SELECT n.path, n.name
-                FROM notes_fts
-                JOIN notes n ON n.id = notes_fts.rowid
-                WHERE notes_fts MATCH @query AND n.vault_id = @vaultId
-                ORDER BY rank
-                LIMIT @limit
-                """;
-        var parameters = vaultId is null
-            ? new (string, object)[] { ("@query", query), ("@limit", limit) }
-            : new (string, object)[] { ("@query", query), ("@limit", limit), ("@vaultId", vaultId.Value) };
+                FROM notes n
+                WHERE 1=1
+                """);
+        }
 
-        using (var cmd = Command(sql, parameters))
+        if (vaultId is not null)
+        {
+            sql.Append(" AND n.vault_id = @vaultId");
+            parameters.Add(("@vaultId", vaultId.Value));
+        }
+
+        if (tags is not null)
+        {
+            for (var i = 0; i < tags.Count; i++)
+            {
+                var p = $"@tag_{i}";
+                sql.Append($" AND EXISTS (SELECT 1 FROM tags WHERE note_id = n.id AND tag = {p})");
+                parameters.Add((p, tags[i]));
+            }
+        }
+
+        if (properties is not null)
+        {
+            for (var i = 0; i < properties.Count; i++)
+            {
+                var pk = $"@pk_{i}";
+                var pv = $"@pv_{i}";
+                sql.Append($" AND EXISTS (SELECT 1 FROM properties WHERE note_id = n.id AND key = {pk} AND value = {pv})");
+                parameters.Add((pk, properties[i].Key));
+                parameters.Add((pv, properties[i].Value));
+            }
+        }
+
+        sql.Append(hasQuery ? " ORDER BY rank" : " ORDER BY n.mtime DESC");
+        sql.Append(" LIMIT @limit");
+        parameters.Add(("@limit", limit));
+
+        var matches = new List<(string Path, string Name)>();
+        using (var cmd = Command(sql.ToString(), parameters.ToArray()))
         {
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -309,22 +350,38 @@ public class IndexDb : IDisposable
             .ToList();
     }
 
-    private static string BuildSnippet(string filePath, string query)
+    private static string BuildSnippet(string filePath, string? query)
     {
-        var needle = StripFtsOperators(query);
-        if (string.IsNullOrWhiteSpace(needle)) return "";
         try
         {
+            var needle = string.IsNullOrWhiteSpace(query) ? null : StripFtsOperators(query);
+            string? firstBodyLine = null;
+            // Skip a YAML frontmatter block when picking the fallback line —
+            // otherwise filter-only searches show "---" as the snippet.
+            var inFrontmatter = false;
+            var sawFrontmatterStart = false;
             foreach (var line in File.ReadLines(filePath))
             {
                 var trimmed = line.Trim();
+                if (!sawFrontmatterStart && trimmed == "---")
+                {
+                    sawFrontmatterStart = true;
+                    inFrontmatter = true;
+                    continue;
+                }
+                if (inFrontmatter)
+                {
+                    if (trimmed == "---") inFrontmatter = false;
+                    continue;
+                }
                 if (trimmed.Length == 0) continue;
-                if (trimmed.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                firstBodyLine ??= trimmed.Length > 200 ? trimmed[..200] + "..." : trimmed;
+                if (needle is not null && trimmed.Contains(needle, StringComparison.OrdinalIgnoreCase))
                     return trimmed.Length > 200 ? trimmed[..200] + "..." : trimmed;
             }
+            return firstBodyLine ?? "";
         }
-        catch { /* file deleted between match and read — ignore */ }
-        return "";
+        catch { return ""; /* file deleted between match and read */ }
     }
 
     private static string StripFtsOperators(string query)

@@ -70,16 +70,40 @@ public static class Commands
     public static async Task<int> SearchAsync(IpcClient client, string[] args)
     {
         var (scope, rest) = VaultArgs.Extract(args);
-        if (rest.Length == 0) return Usage("pumex search <query> [--limit N] [--vault NAME | --vault-path PATH | --all]");
 
-        var query = rest[0];
-        var requestArgs = new Dictionary<string, string> { ["query"] = query };
-        scope.ApplyTo(requestArgs);
+        // First positional arg (if any) is the FTS query. A leading flag
+        // means the user is doing a filter-only search like `--tag work`.
+        string? query = rest.Length > 0 && !rest[0].StartsWith("--") ? rest[0] : null;
+        var startFlags = query is null ? 0 : 1;
 
-        for (var i = 1; i < rest.Length - 1; i++)
+        var tags = new List<string>();
+        var properties = new List<string>();
+        string? limit = null;
+        for (var i = startFlags; i < rest.Length; i++)
         {
-            if (rest[i] == "--limit") requestArgs["limit"] = rest[i + 1];
+            switch (rest[i])
+            {
+                case "--limit" when i + 1 < rest.Length:
+                    limit = rest[++i];
+                    break;
+                case "--tag" when i + 1 < rest.Length:
+                    tags.Add(rest[++i]);
+                    break;
+                case "--property" when i + 1 < rest.Length:
+                    properties.Add(rest[++i]);
+                    break;
+            }
         }
+
+        if (query is null && tags.Count == 0 && properties.Count == 0)
+            return Usage("pumex search <query> [--tag X] [--property k=v] [--limit N] [--vault ...]");
+
+        var requestArgs = new Dictionary<string, string>();
+        if (query is not null) requestArgs["query"] = query;
+        if (limit is not null) requestArgs["limit"] = limit;
+        if (tags.Count > 0) requestArgs["tags"] = string.Join(',', tags);
+        if (properties.Count > 0) requestArgs["properties"] = string.Join(';', properties);
+        scope.ApplyTo(requestArgs);
 
         var resp = await client.SendAsync<List<SearchResult>>("search", requestArgs);
         if (!resp.Success) return Error(resp.Error);

@@ -53,7 +53,7 @@ static void PrintUsage()
     AnsiConsole.WriteLine("Usage:");
     AnsiConsole.WriteLine("  pumex ping");
     AnsiConsole.WriteLine("  pumex new <name> [path]");
-    AnsiConsole.WriteLine("  pumex search <query> [--limit N] [--vault NAME | --vault-path PATH | --all]");
+    AnsiConsole.WriteLine("  pumex search [<query>] [--tag X]... [--property k=v]... [--limit N] [--vault NAME | --vault-path PATH | --all]");
     AnsiConsole.WriteLine("  pumex tags [--vault NAME | --vault-path PATH | --all]");
     AnsiConsole.WriteLine("  pumex backlinks <path-or-name> [--vault NAME | --vault-path PATH | --all]");
     AnsiConsole.WriteLine("  pumex vaults");
