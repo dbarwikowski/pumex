@@ -31,6 +31,9 @@ var host = Host.CreateDefaultBuilder(args)
         s.AddSingleton<ICommandHandler, NoteReadHandler>();
         s.AddSingleton<ICommandHandler, NoteCreateHandler>();
         s.AddSingleton<ICommandHandler, NoteAppendHandler>();
+        s.AddSingleton<ICommandHandler, PropertyListHandler>();
+        s.AddSingleton<ICommandHandler, PropertyGetHandler>();
+        s.AddSingleton<ICommandHandler, PropertySetHandler>();
         s.AddHostedService<IpcServer>();
     })
     .Build();

@@ -298,6 +298,84 @@ public static class Commands
         return 0;
     }
 
+    public static async Task<int> PropertyAsync(IpcClient client, string[] args)
+    {
+        if (args.Length == 0) return Usage("pumex property <list|get|set> ...");
+
+        return args[0] switch
+        {
+            "list" => await PropertyListAsync(client, args[1..]),
+            "get" => await PropertyGetAsync(client, args[1..]),
+            "set" => await PropertySetAsync(client, args[1..]),
+            _ => Usage("pumex property <list|get|set> ..."),
+        };
+    }
+
+    private static async Task<int> PropertyListAsync(IpcClient client, string[] args)
+    {
+        var (scope, rest) = VaultArgs.Extract(args);
+        if (rest.Length == 0) return Usage("pumex property list <path-or-name> [--vault NAME | --vault-path PATH]");
+
+        var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, rest[0]) };
+        scope.ApplyTo(requestArgs);
+
+        var resp = await client.SendAsync<List<PropertyEntry>>("property:list", requestArgs);
+        if (!resp.Success) return Error(resp.Error);
+
+        var props = resp.Data ?? [];
+        if (props.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[dim]no properties[/]");
+            return 0;
+        }
+
+        var table = new Table().Border(TableBorder.Minimal);
+        table.AddColumn("Property");
+        table.AddColumn("Value");
+        foreach (var p in props) table.AddRow(p.Key.EscapeMarkup(), p.Value.EscapeMarkup());
+        AnsiConsole.Write(table);
+        return 0;
+    }
+
+    private static async Task<int> PropertyGetAsync(IpcClient client, string[] args)
+    {
+        var (scope, rest) = VaultArgs.Extract(args);
+        if (rest.Length < 2) return Usage("pumex property get <path-or-name> <key> [--vault NAME | --vault-path PATH]");
+
+        var requestArgs = new Dictionary<string, string>
+        {
+            ["path"] = VaultArgs.ResolvePath(scope, rest[0]),
+            ["key"] = rest[1],
+        };
+        scope.ApplyTo(requestArgs);
+
+        var resp = await client.SendAsync<string>("property:get", requestArgs);
+        if (!resp.Success) return Error(resp.Error);
+
+        AnsiConsole.WriteLine(resp.Data ?? "");
+        return 0;
+    }
+
+    private static async Task<int> PropertySetAsync(IpcClient client, string[] args)
+    {
+        var (scope, rest) = VaultArgs.Extract(args);
+        if (rest.Length < 3) return Usage("pumex property set <path-or-name> <key> <value> [--vault NAME | --vault-path PATH]");
+
+        var requestArgs = new Dictionary<string, string>
+        {
+            ["path"] = VaultArgs.ResolvePath(scope, rest[0]),
+            ["key"] = rest[1],
+            ["value"] = rest[2],
+        };
+        scope.ApplyTo(requestArgs);
+
+        var resp = await client.SendAsync<NotePathResult>("property:set", requestArgs);
+        if (!resp.Success) return Error(resp.Error);
+
+        AnsiConsole.MarkupLine($"[green]set[/] {rest[1].EscapeMarkup()}={rest[2].EscapeMarkup()} on {resp.Data!.Path.EscapeMarkup()}");
+        return 0;
+    }
+
     public static async Task<int> DaemonAsync(IpcClient client, string[] args)
     {
         if (args.Length == 0) return Usage("pumex daemon <status|install|uninstall|restart> [--daemon-path PATH]");

@@ -22,6 +22,7 @@ try
         "vaults" => await Commands.VaultsAsync(client),
         "vault" => await Commands.VaultAsync(client, args[1..]),
         "note" => await Commands.NoteAsync(client, args[1..]),
+        "property" => await Commands.PropertyAsync(client, args[1..]),
         "daemon" => await Commands.DaemonAsync(client, args[1..]),
         _ => UnknownCommand(args[0]),
     };
@@ -59,6 +60,9 @@ static void PrintUsage()
     AnsiConsole.WriteLine("  pumex note read <path-or-name> [--raw] [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex note create <path-or-name> [--content TEXT | --stdin] [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex note append <path-or-name> [--content TEXT | --stdin] [--inline] [--vault NAME | --vault-path PATH]");
+    AnsiConsole.WriteLine("  pumex property list <path-or-name> [--vault NAME | --vault-path PATH]");
+    AnsiConsole.WriteLine("  pumex property get  <path-or-name> <key> [--vault NAME | --vault-path PATH]");
+    AnsiConsole.WriteLine("  pumex property set  <path-or-name> <key> <value> [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex daemon <status|install|uninstall|restart> [--daemon-path PATH]");
     AnsiConsole.WriteLine();
     AnsiConsole.WriteLine("Commands that operate on vault contents default to the vault containing the");

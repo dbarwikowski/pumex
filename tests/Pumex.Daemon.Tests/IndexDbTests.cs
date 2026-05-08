@@ -184,6 +184,42 @@ public class IndexDbTests : IDisposable
     }
 
     [Fact]
+    public async Task GetPropertiesAsync_returns_frontmatter_keys_in_alphabetical_order()
+    {
+        var vaultId = await _db.AddVaultAsync("v", "/v");
+        var note = MakeNote("/v/n.md", frontmatter: new Dictionary<string, object>
+        {
+            ["zeta"]  = "last",
+            ["alpha"] = "first",
+            ["mu"]    = "middle",
+        });
+        await _db.UpsertNotesAsync(vaultId, [note]);
+        var noteId = (await _db.GetNoteIdAsync("/v/n.md"))!.Value;
+
+        var props = await _db.GetPropertiesAsync(noteId);
+
+        Assert.Equal(new[] { "alpha", "mu", "zeta" }, props.Select(p => p.Key));
+        Assert.Equal("first",  props[0].Value);
+        Assert.Equal("middle", props[1].Value);
+        Assert.Equal("last",   props[2].Value);
+    }
+
+    [Fact]
+    public async Task GetPropertyAsync_returns_value_or_null()
+    {
+        var vaultId = await _db.AddVaultAsync("v", "/v");
+        var note = MakeNote("/v/n.md", frontmatter: new Dictionary<string, object>
+        {
+            ["status"] = "draft",
+        });
+        await _db.UpsertNotesAsync(vaultId, [note]);
+        var noteId = (await _db.GetNoteIdAsync("/v/n.md"))!.Value;
+
+        Assert.Equal("draft", await _db.GetPropertyAsync(noteId, "status"));
+        Assert.Null(await _db.GetPropertyAsync(noteId, "missing"));
+    }
+
+    [Fact]
     public async Task GetNotePathsByNameAsync_returns_only_matches_in_the_given_vault()
     {
         var aId = await _db.AddVaultAsync("alpha", "/alpha");

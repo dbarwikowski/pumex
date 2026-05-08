@@ -396,6 +396,31 @@ public class IndexDb : IDisposable
     }
 
     // -------------------------
+    // Properties
+    // -------------------------
+
+    public async Task<List<PropertyEntry>> GetPropertiesAsync(long noteId)
+    {
+        var result = new List<PropertyEntry>();
+        using var cmd = Command(
+            "SELECT key, value FROM properties WHERE note_id = @noteId ORDER BY key",
+            ("@noteId", noteId));
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            result.Add(new PropertyEntry(reader.GetString(0), reader.IsDBNull(1) ? "" : reader.GetString(1)));
+        return result;
+    }
+
+    public async Task<string?> GetPropertyAsync(long noteId, string key)
+    {
+        using var cmd = Command(
+            "SELECT value FROM properties WHERE note_id = @noteId AND key = @key",
+            ("@noteId", noteId), ("@key", key));
+        var result = await cmd.ExecuteScalarAsync();
+        return result is string s ? s : null;
+    }
+
+    // -------------------------
     // Private helpers
     // -------------------------
 
