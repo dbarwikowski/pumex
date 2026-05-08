@@ -10,6 +10,9 @@ public class TagsHandler : ICommandHandler
 
     public TagsHandler(IndexDb db) => _db = db;
 
-    public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct) =>
-        await _db.GetTagsAsync();
+    public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
+    {
+        var vault = await request.ResolveVaultAsync(_db);
+        return await _db.GetTagsAsync(vault?.Id);
+    }
 }

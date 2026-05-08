@@ -12,9 +12,8 @@ public class BacklinksHandler : ICommandHandler
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        if (!request.Args.TryGetValue("path", out var path) || string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("path is required");
-
-        return await _db.GetBacklinksAsync(path);
+        var vault = await request.ResolveVaultAsync(_db);
+        var path = IpcRequestExtensions.ResolveNotePath(request.Require("path"), vault);
+        return await _db.GetBacklinksAsync(path, vault?.Id);
     }
 }

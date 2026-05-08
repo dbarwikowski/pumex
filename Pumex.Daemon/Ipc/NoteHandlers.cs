@@ -5,14 +5,20 @@ namespace Pumex.Daemon.Ipc;
 public class NoteReadHandler : ICommandHandler
 {
     private readonly NoteParser _parser;
+    private readonly IndexDb _db;
 
     public string Command => "note:read";
 
-    public NoteReadHandler(NoteParser parser) => _parser = parser;
-
-    public Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
+    public NoteReadHandler(NoteParser parser, IndexDb db)
     {
-        var path = Path.GetFullPath(request.Require("path"));
+        _parser = parser;
+        _db = db;
+    }
+
+    public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
+    {
+        var vault = await request.ResolveVaultAsync(_db);
+        var path = IpcRequestExtensions.ResolveNotePath(request.Require("path"), vault);
         if (!File.Exists(path))
             throw new FileNotFoundException($"Note not found: {path}");
 
@@ -20,13 +26,13 @@ public class NoteReadHandler : ICommandHandler
         var props = doc.Frontmatter
             .ToDictionary(kv => kv.Key, kv => kv.Value?.ToString() ?? "");
 
-        return Task.FromResult<object?>(new NoteContent(
+        return new NoteContent(
             Path: path,
             Raw: doc.RawContent,
             Body: doc.Content,
             Properties: props,
             Tags: doc.Tags,
-            OutgoingLinks: doc.OutgoingLinks));
+            OutgoingLinks: doc.OutgoingLinks);
     }
 }
 

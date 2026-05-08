@@ -112,6 +112,14 @@ public class IndexDb : IDisposable
         return new VaultRecord(reader.GetInt64(0), reader.GetString(1), reader.GetString(2));
     }
 
+    public async Task<VaultRecord?> GetVaultByNameAsync(string name)
+    {
+        using var cmd = Command("SELECT id, name, path FROM vaults WHERE name = @name", ("@name", name));
+        using var reader = await cmd.ExecuteReaderAsync();
+        if (!await reader.ReadAsync()) return null;
+        return new VaultRecord(reader.GetInt64(0), reader.GetString(1), reader.GetString(2));
+    }
+
     // -------------------------
     // Notes
     // -------------------------
@@ -220,22 +228,34 @@ public class IndexDb : IDisposable
     // Search
     // -------------------------
 
-    public async Task<List<SearchResult>> SearchAsync(string query, int limit = 50)
+    public async Task<List<SearchResult>> SearchAsync(string query, int limit = 50, long? vaultId = null)
     {
         // Contentless FTS — get matching note paths, then build snippets from
         // disk in C#. Best-effort substring match against the raw query string;
         // works fine for plain queries, degrades for complex FTS expressions.
         var matches = new List<(string Path, string Name)>();
-        using (var cmd = Command("""
-            SELECT n.path, n.name
-            FROM notes_fts
-            JOIN notes n ON n.id = notes_fts.rowid
-            WHERE notes_fts MATCH @query
-            ORDER BY rank
-            LIMIT @limit
-            """,
-            ("@query", query),
-            ("@limit", limit)))
+        var sql = vaultId is null
+            ? """
+                SELECT n.path, n.name
+                FROM notes_fts
+                JOIN notes n ON n.id = notes_fts.rowid
+                WHERE notes_fts MATCH @query
+                ORDER BY rank
+                LIMIT @limit
+                """
+            : """
+                SELECT n.path, n.name
+                FROM notes_fts
+                JOIN notes n ON n.id = notes_fts.rowid
+                WHERE notes_fts MATCH @query AND n.vault_id = @vaultId
+                ORDER BY rank
+                LIMIT @limit
+                """;
+        var parameters = vaultId is null
+            ? new (string, object)[] { ("@query", query), ("@limit", limit) }
+            : new (string, object)[] { ("@query", query), ("@limit", limit), ("@vaultId", vaultId.Value) };
+
+        using (var cmd = Command(sql, parameters))
         {
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -280,10 +300,19 @@ public class IndexDb : IDisposable
     // Tags
     // -------------------------
 
-    public async Task<List<TagCount>> GetTagsAsync()
+    public async Task<List<TagCount>> GetTagsAsync(long? vaultId = null)
     {
         var result = new List<TagCount>();
-        using var cmd = Command("SELECT tag, COUNT(*) FROM tags GROUP BY tag ORDER BY tag");
+        using var cmd = vaultId is null
+            ? Command("SELECT tag, COUNT(*) FROM tags GROUP BY tag ORDER BY tag")
+            : Command("""
+                SELECT t.tag, COUNT(*)
+                FROM tags t
+                JOIN notes n ON n.id = t.note_id
+                WHERE n.vault_id = @vaultId
+                GROUP BY t.tag
+                ORDER BY t.tag
+                """, ("@vaultId", vaultId.Value));
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             result.Add(new TagCount(reader.GetString(0), reader.GetInt32(1)));
@@ -294,16 +323,24 @@ public class IndexDb : IDisposable
     // Backlinks
     // -------------------------
 
-    public async Task<List<string>> GetBacklinksAsync(string path)
+    public async Task<List<string>> GetBacklinksAsync(string path, long? vaultId = null)
     {
         var result = new List<string>();
-        using var cmd = Command("""
-            SELECT DISTINCT n.path
-            FROM links l
-            JOIN notes n ON n.id = l.source_id
-            JOIN notes t ON t.id = l.resolved_id
-            WHERE t.path = @path
-            """, ("@path", path));
+        using var cmd = vaultId is null
+            ? Command("""
+                SELECT DISTINCT n.path
+                FROM links l
+                JOIN notes n ON n.id = l.source_id
+                JOIN notes t ON t.id = l.resolved_id
+                WHERE t.path = @path
+                """, ("@path", path))
+            : Command("""
+                SELECT DISTINCT n.path
+                FROM links l
+                JOIN notes n ON n.id = l.source_id
+                JOIN notes t ON t.id = l.resolved_id
+                WHERE t.path = @path AND n.vault_id = @vaultId
+                """, ("@path", path), ("@vaultId", vaultId.Value));
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             result.Add(reader.GetString(0));

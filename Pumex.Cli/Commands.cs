@@ -69,14 +69,16 @@ public static class Commands
 
     public static async Task<int> SearchAsync(IpcClient client, string[] args)
     {
-        if (args.Length == 0) return Usage("pumex search <query> [--limit N]");
+        var (scope, rest) = VaultArgs.Extract(args);
+        if (rest.Length == 0) return Usage("pumex search <query> [--limit N] [--vault NAME | --vault-path PATH | --all]");
 
-        var query = args[0];
+        var query = rest[0];
         var requestArgs = new Dictionary<string, string> { ["query"] = query };
+        scope.ApplyTo(requestArgs);
 
-        for (var i = 1; i < args.Length - 1; i++)
+        for (var i = 1; i < rest.Length - 1; i++)
         {
-            if (args[i] == "--limit") requestArgs["limit"] = args[i + 1];
+            if (rest[i] == "--limit") requestArgs["limit"] = rest[i + 1];
         }
 
         var resp = await client.SendAsync<List<SearchResult>>("search", requestArgs);
@@ -100,9 +102,13 @@ public static class Commands
         return 0;
     }
 
-    public static async Task<int> TagsAsync(IpcClient client)
+    public static async Task<int> TagsAsync(IpcClient client, string[] args)
     {
-        var resp = await client.SendAsync<List<TagCount>>("tags");
+        var (scope, _) = VaultArgs.Extract(args);
+        var requestArgs = new Dictionary<string, string>();
+        scope.ApplyTo(requestArgs);
+
+        var resp = await client.SendAsync<List<TagCount>>("tags", requestArgs);
         if (!resp.Success) return Error(resp.Error);
 
         var tags = resp.Data ?? [];
@@ -124,9 +130,13 @@ public static class Commands
 
     public static async Task<int> BacklinksAsync(IpcClient client, string[] args)
     {
-        if (args.Length == 0) return Usage("pumex backlinks <path>");
+        var (scope, rest) = VaultArgs.Extract(args);
+        if (rest.Length == 0) return Usage("pumex backlinks <path> [--vault NAME | --vault-path PATH | --all]");
 
-        var resp = await client.SendAsync<List<string>>("backlinks", new() { ["path"] = args[0] });
+        var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, rest[0]) };
+        scope.ApplyTo(requestArgs);
+
+        var resp = await client.SendAsync<List<string>>("backlinks", requestArgs);
         if (!resp.Success) return Error(resp.Error);
 
         var paths = resp.Data ?? [];
@@ -207,12 +217,16 @@ public static class Commands
 
     private static async Task<int> NoteReadAsync(IpcClient client, string[] args)
     {
-        if (args.Length == 0) return Usage("pumex note read <path> [--raw]");
+        var (scope, rest) = VaultArgs.Extract(args);
+        if (rest.Length == 0) return Usage("pumex note read <path> [--raw] [--vault NAME | --vault-path PATH]");
 
-        var path = Path.GetFullPath(args[0]);
-        var raw = args.Contains("--raw");
+        var path = VaultArgs.ResolvePath(scope, rest[0]);
+        var raw = rest.Contains("--raw");
 
-        var resp = await client.SendAsync<NoteContent>("note:read", new() { ["path"] = path });
+        var requestArgs = new Dictionary<string, string> { ["path"] = path };
+        scope.ApplyTo(requestArgs);
+
+        var resp = await client.SendAsync<NoteContent>("note:read", requestArgs);
         if (!resp.Success) return Error(resp.Error);
 
         var note = resp.Data!;

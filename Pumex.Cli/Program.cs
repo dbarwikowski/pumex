@@ -17,7 +17,7 @@ try
         "ping" => await Commands.PingAsync(client),
         "new" => await Commands.NewVaultAsync(client, args[1..]),
         "search" => await Commands.SearchAsync(client, args[1..]),
-        "tags" => await Commands.TagsAsync(client),
+        "tags" => await Commands.TagsAsync(client, args[1..]),
         "backlinks" => await Commands.BacklinksAsync(client, args[1..]),
         "vaults" => await Commands.VaultsAsync(client),
         "vault" => await Commands.VaultAsync(client, args[1..]),
@@ -51,13 +51,16 @@ static void PrintUsage()
     AnsiConsole.WriteLine("Usage:");
     AnsiConsole.WriteLine("  pumex ping");
     AnsiConsole.WriteLine("  pumex new <name> [path]");
-    AnsiConsole.WriteLine("  pumex search <query> [--limit N]");
-    AnsiConsole.WriteLine("  pumex tags");
-    AnsiConsole.WriteLine("  pumex backlinks <path>");
+    AnsiConsole.WriteLine("  pumex search <query> [--limit N] [--vault NAME | --vault-path PATH | --all]");
+    AnsiConsole.WriteLine("  pumex tags [--vault NAME | --vault-path PATH | --all]");
+    AnsiConsole.WriteLine("  pumex backlinks <path> [--vault NAME | --vault-path PATH | --all]");
     AnsiConsole.WriteLine("  pumex vaults");
     AnsiConsole.WriteLine("  pumex vault add <name> <path>");
-    AnsiConsole.WriteLine("  pumex note read <path> [--raw]");
+    AnsiConsole.WriteLine("  pumex note read <path> [--raw] [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex note create <path> [--content TEXT | --stdin]");
     AnsiConsole.WriteLine("  pumex note append <path> [--content TEXT | --stdin] [--inline]");
     AnsiConsole.WriteLine("  pumex daemon <status|install|uninstall|restart> [--daemon-path PATH]");
+    AnsiConsole.WriteLine();
+    AnsiConsole.WriteLine("Commands that operate on vault contents default to the vault containing the");
+    AnsiConsole.WriteLine("current directory. Use --vault, --vault-path, or --all to override.");
 }
