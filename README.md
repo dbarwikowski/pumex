@@ -139,17 +139,43 @@ Run them yourself: `dotnet run -c Release --project tests/Pumex.Benchmarks`.
 
 ## Contributing
 
-Build:
+### Project layout
+
+| Directory | Role |
+|---|---|
+| `Pumex.Daemon/` | Indexer, IPC server, command handlers, SQLite via FTS5 |
+| `Pumex.Contracts/` | DTOs, `PumexPaths`, `IpcRequest/Response`. Zero external deps. |
+| `Pumex.Cli/` | Thin CLI — Spectre.Console + named-pipe client. References `Pumex.Contracts` only. |
+| `tests/` | Unit tests (`Pumex.Daemon.Tests`), integration tests, benchmarks |
+
+### Build and test
 
 ```sh
 dotnet build Pumex.sln
 dotnet test
-dotnet run --project Pumex.Daemon       # foreground daemon for development
 ```
 
-`Pumex.Cli` (thin client, references `Pumex.Contracts` only), `Pumex.Daemon` (the indexer + IPC server), and `Pumex.Contracts` (DTOs, paths). Tests under `tests/`.
+### Running a dev daemon alongside the installed one
 
-PRs welcome. The design log is in `context.md` (Polish).
+Set `PUMEX_HOME` to an isolated directory. This changes both the pipe name and the index path so the dev daemon and the installed production service coexist without conflicts:
+
+```sh
+# Linux / macOS
+export PUMEX_HOME="$HOME/.pumex-dev"
+dotnet run --project Pumex.Daemon       # dev daemon — own pipe, own index.db
+pumex search foo                        # CLI picks up PUMEX_HOME automatically
+```
+
+```powershell
+# Windows
+$env:PUMEX_HOME = "$HOME\.pumex-dev"
+dotnet run --project Pumex.Daemon
+pumex search foo
+```
+
+The production daemon (installed service, no env var) is untouched. The dev index is a rebuildable cache — delete `~/.pumex-dev/index.db` and restart any time.
+
+PRs welcome.
 
 ## License
 
