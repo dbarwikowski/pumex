@@ -37,6 +37,24 @@ pumex daemon install      # registers the daemon as a Windows service
 
 The installer downloads the right binary for your OS + arch from the latest GitHub Release and drops it into `~/.pumex/bin/`. Pin a version with `PUMEX_VERSION=v0.2.0` (or `$env:PUMEX_VERSION` on Windows).
 
+## Uninstall
+
+**Linux / macOS:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/uninstall.sh | sh
+# Add PUMEX_PURGE=1 to also delete ~/.pumex/ (index, config).
+```
+
+**Windows (PowerShell, elevated for service removal):**
+
+```powershell
+iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/uninstall.ps1 | iex
+# Add $env:PUMEX_PURGE = '1' to also delete $HOME\.pumex\ (index, config).
+```
+
+The scripts stop and remove the daemon service, delete the binaries from `~/.pumex/bin/`, and leave the data directory (`~/.pumex/`) untouched unless you opt into purge. Vault markers (`.pumex/` directories inside your note folders) are never touched.
+
 ## 30-second demo
 
 ```sh
