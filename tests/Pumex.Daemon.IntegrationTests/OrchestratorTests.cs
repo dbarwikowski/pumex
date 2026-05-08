@@ -62,6 +62,45 @@ public class OrchestratorTests : IDisposable
     }
 
     [Fact]
+    public async Task RemoveVaultAsync_stops_a_single_vault_without_taking_down_the_others()
+    {
+        // Set up two vaults, both with one note.
+        var alphaDir = CreateVaultDir("alpha");
+        File.WriteAllText(Path.Combine(alphaDir, "a.md"), "alpha body\n");
+        var betaDir = CreateVaultDir("beta");
+        File.WriteAllText(Path.Combine(betaDir, "b.md"), "beta body\n");
+        await _db.AddVaultAsync("alpha", alphaDir);
+        await _db.AddVaultAsync("beta",  betaDir);
+        var alpha = (await _db.GetVaultByPathAsync(alphaDir))!;
+        var beta  = (await _db.GetVaultByPathAsync(betaDir))!;
+
+        var orchestrator = BuildOrchestrator();
+        using var cts = new CancellationTokenSource();
+        await orchestrator.StartAsync(cts.Token);
+
+        try
+        {
+            await AsyncPolling.UntilAsync(
+                async () => (await _db.GetAllPathsAsync(alpha.Id)).Count == 1
+                         && (await _db.GetAllPathsAsync(beta.Id)).Count == 1,
+                timeoutMs: 8000);
+
+            await orchestrator.RemoveVaultAsync(alpha.Id);
+
+            // Beta keeps indexing — write a new file and verify it gets picked up.
+            File.WriteAllText(Path.Combine(betaDir, "b2.md"), "still indexing, marker word: pangolin\n");
+            await AsyncPolling.UntilAsync(
+                async () => (await _db.SearchAsync("pangolin", vaultId: beta.Id)).Count == 1,
+                timeoutMs: 8000,
+                message: "beta vault stopped indexing after alpha was removed");
+        }
+        finally
+        {
+            await orchestrator.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
     public async Task AddVaultAsync_starts_indexing_a_new_vault_at_runtime()
     {
         // Orchestrator boots with no vaults registered.

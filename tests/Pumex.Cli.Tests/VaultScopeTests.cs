@@ -60,6 +60,17 @@ public class VaultScopeTests
     }
 
     [Fact]
+    public void ResolvePath_accepts_forward_slash_absolute_on_windows()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var scope = VaultScope.Global;
+
+        var resolved = VaultArgs.ResolvePath(scope, "C:/notes/foo.md");
+
+        Assert.Equal(@"C:\notes\foo.md", resolved);
+    }
+
+    [Fact]
     public void ResolvePath_returns_canonical_absolute_path_unchanged()
     {
         var raw = OperatingSystem.IsWindows() ? @"C:\foo\..\bar\note.md" : "/foo/../bar/note.md";

@@ -63,6 +63,43 @@ public class NoteCreateHandler : ICommandHandler
     }
 }
 
+public class NoteListHandler : ICommandHandler
+{
+    private readonly IndexDb _db;
+
+    public string Command => "note:list";
+
+    public NoteListHandler(IndexDb db) => _db = db;
+
+    public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
+    {
+        var vault = await request.ResolveVaultAsync(_db);
+        return await _db.ListNotesAsync(vault?.Id);
+    }
+}
+
+public class NoteDeleteHandler : ICommandHandler
+{
+    private readonly IndexDb _db;
+
+    public string Command => "note:delete";
+
+    public NoteDeleteHandler(IndexDb db) => _db = db;
+
+    public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
+    {
+        var vault = await request.ResolveVaultAsync(_db);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
+
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"Note not found: {path}");
+
+        File.Delete(path);
+        // Watcher catches the deletion and reindexes; no synchronous DB call here.
+        return new NotePathResult(path);
+    }
+}
+
 public class NoteAppendHandler : ICommandHandler
 {
     private readonly IndexDb _db;

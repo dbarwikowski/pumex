@@ -28,9 +28,12 @@ var host = Host.CreateDefaultBuilder(args)
         s.AddSingleton<ICommandHandler, BacklinksHandler>();
         s.AddSingleton<ICommandHandler, VaultsHandler>();
         s.AddSingleton<ICommandHandler, VaultAddHandler>();
+        s.AddSingleton<ICommandHandler, VaultRemoveHandler>();
         s.AddSingleton<ICommandHandler, NoteReadHandler>();
         s.AddSingleton<ICommandHandler, NoteCreateHandler>();
         s.AddSingleton<ICommandHandler, NoteAppendHandler>();
+        s.AddSingleton<ICommandHandler, NoteDeleteHandler>();
+        s.AddSingleton<ICommandHandler, NoteListHandler>();
         s.AddSingleton<ICommandHandler, PropertyListHandler>();
         s.AddSingleton<ICommandHandler, PropertyGetHandler>();
         s.AddSingleton<ICommandHandler, PropertySetHandler>();

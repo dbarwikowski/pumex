@@ -184,6 +184,67 @@ public class IndexDbTests : IDisposable
     }
 
     [Fact]
+    public async Task ListNotesAsync_returns_summaries_sorted_by_mtime_descending()
+    {
+        var vaultId = await _db.AddVaultAsync("v", "/v");
+        await _db.UpsertNotesAsync(vaultId, new[]
+        {
+            MakeNote("/v/old.md")    with { Mtime = 100 },
+            MakeNote("/v/recent.md") with { Mtime = 200 },
+            MakeNote("/v/middle.md") with { Mtime = 150 },
+        });
+
+        var notes = await _db.ListNotesAsync(vaultId);
+
+        Assert.Equal(new[] { "/v/recent.md", "/v/middle.md", "/v/old.md" }, notes.Select(n => n.Path));
+    }
+
+    [Fact]
+    public async Task ListNotesAsync_without_vault_returns_all_vaults()
+    {
+        var aId = await _db.AddVaultAsync("a", "/a");
+        var bId = await _db.AddVaultAsync("b", "/b");
+        await _db.UpsertNotesAsync(aId, [MakeNote("/a/n.md")]);
+        await _db.UpsertNotesAsync(bId, [MakeNote("/b/n.md")]);
+
+        var all = await _db.ListNotesAsync();
+
+        Assert.Equal(2, all.Count);
+    }
+
+    [Fact]
+    public async Task RemoveVaultAsync_cascades_to_notes_tags_properties_and_links()
+    {
+        var vaultId = await _db.AddVaultAsync("doomed", "/doomed");
+        var note = MakeNote("/doomed/n.md", tags: ["work"], outgoing: ["other"]);
+        await _db.UpsertNotesAsync(vaultId, [note]);
+        Assert.Single(await _db.GetTagsAsync(vaultId));
+
+        await _db.RemoveVaultAsync(vaultId);
+
+        Assert.Null(await _db.GetVaultByNameAsync("doomed"));
+        Assert.Empty(await _db.GetTagsAsync(vaultId));
+        Assert.Empty(await _db.GetAllPathsAsync(vaultId));
+    }
+
+    [Fact]
+    public async Task RemoveVaultAsync_leaves_other_vaults_untouched()
+    {
+        var aId = await _db.AddVaultAsync("a", "/a");
+        var bId = await _db.AddVaultAsync("b", "/b");
+        await _db.UpsertNotesAsync(aId, [MakeNote("/a/n.md", tags: ["a-tag"])]);
+        await _db.UpsertNotesAsync(bId, [MakeNote("/b/n.md", tags: ["b-tag"])]);
+
+        await _db.RemoveVaultAsync(aId);
+
+        Assert.Null(await _db.GetVaultByNameAsync("a"));
+        Assert.NotNull(await _db.GetVaultByNameAsync("b"));
+        var bTags = await _db.GetTagsAsync(bId);
+        Assert.Single(bTags);
+        Assert.Equal("b-tag", bTags[0].Tag);
+    }
+
+    [Fact]
     public async Task GetPropertiesAsync_returns_frontmatter_keys_in_alphabetical_order()
     {
         var vaultId = await _db.AddVaultAsync("v", "/v");

@@ -50,6 +50,33 @@ public class IpcRequestExtensionsTests
     }
 
     [Fact]
+    public async Task ResolveNotePathAsync_accepts_forward_slashes_in_absolute_windows_path()
+    {
+        // Bash-on-Windows users type C:/foo/bar.md to dodge backslash escaping;
+        // .NET's Path.IsPathFullyQualified + GetFullPath accept both directions
+        // and canonicalise to the platform separator.
+        if (!OperatingSystem.IsWindows()) return;
+        using var fixture = new IndexDbFixture();
+        var raw = "C:/some/path/note.md";
+
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync(raw, vault: null, fixture.Db);
+
+        Assert.Equal(@"C:\some\path\note.md", resolved);
+    }
+
+    [Fact]
+    public async Task ResolveNotePathAsync_accepts_forward_slashes_in_vault_relative_path()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var fixture = new IndexDbFixture();
+        var vault = new VaultRecord(Id: 1, Name: "v", Path: @"C:\vault");
+
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("sub/note.md", vault, fixture.Db);
+
+        Assert.Equal(@"C:\vault\sub\note.md", resolved);
+    }
+
+    [Fact]
     public async Task ResolveNotePathAsync_returns_canonical_absolute_path_unchanged()
     {
         using var fixture = new IndexDbFixture();

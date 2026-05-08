@@ -56,10 +56,13 @@ static void PrintUsage()
     AnsiConsole.WriteLine("  pumex tags [--vault NAME | --vault-path PATH | --all]");
     AnsiConsole.WriteLine("  pumex backlinks <path-or-name> [--vault NAME | --vault-path PATH | --all]");
     AnsiConsole.WriteLine("  pumex vaults");
-    AnsiConsole.WriteLine("  pumex vault add <name> <path>");
-    AnsiConsole.WriteLine("  pumex note read <path-or-name> [--raw] [--vault NAME | --vault-path PATH]");
+    AnsiConsole.WriteLine("  pumex vault add    <name> <path>");
+    AnsiConsole.WriteLine("  pumex vault remove <name>");
+    AnsiConsole.WriteLine("  pumex note list   [--vault NAME | --vault-path PATH | --all]");
+    AnsiConsole.WriteLine("  pumex note read   <path-or-name> [--raw] [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex note create <path-or-name> [--content TEXT | --stdin] [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex note append <path-or-name> [--content TEXT | --stdin] [--inline] [--vault NAME | --vault-path PATH]");
+    AnsiConsole.WriteLine("  pumex note delete <path-or-name> [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex property list <path-or-name> [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex property get  <path-or-name> <key> [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex property set  <path-or-name> <key> <value> [--vault NAME | --vault-path PATH]");

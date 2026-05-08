@@ -6,6 +6,12 @@ namespace Pumex.Daemon;
 public class IndexDb : IDisposable
 {
     private readonly SqliteConnection _connection;
+    // Microsoft.Data.Sqlite doesn't support concurrent transactions on a single
+    // connection (BeginTransaction throws if one is already in flight), and
+    // we share one IndexDb across every IndexingService. Serialise public
+    // methods through this gate. The throughput cost is small — SQLite + WAL
+    // is fast — and the per-vault-connection refactor can come later.
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     public IndexDb(string dbPath)
     {
@@ -85,6 +91,7 @@ public class IndexDb : IDisposable
 
     public async Task<long> AddVaultAsync(string name, string path)
     {
+        using var _ = await AcquireAsync();
         using var cmd = Command("""
             INSERT INTO vaults (name, path) VALUES (@name, @path)
             ON CONFLICT(path) DO UPDATE SET name = excluded.name
@@ -96,6 +103,7 @@ public class IndexDb : IDisposable
 
     public async Task<List<VaultRecord>> GetVaultsAsync()
     {
+        using var _ = await AcquireAsync();
         var result = new List<VaultRecord>();
         using var cmd = Command("SELECT id, name, path FROM vaults");
         using var reader = await cmd.ExecuteReaderAsync();
@@ -106,6 +114,7 @@ public class IndexDb : IDisposable
 
     public async Task<VaultRecord?> GetVaultByPathAsync(string path)
     {
+        using var _ = await AcquireAsync();
         using var cmd = Command("SELECT id, name, path FROM vaults WHERE path = @path", ("@path", path));
         using var reader = await cmd.ExecuteReaderAsync();
         if (!await reader.ReadAsync()) return null;
@@ -114,10 +123,23 @@ public class IndexDb : IDisposable
 
     public async Task<VaultRecord?> GetVaultByNameAsync(string name)
     {
+        using var _ = await AcquireAsync();
         using var cmd = Command("SELECT id, name, path FROM vaults WHERE name = @name", ("@name", name));
         using var reader = await cmd.ExecuteReaderAsync();
         if (!await reader.ReadAsync()) return null;
         return new VaultRecord(reader.GetInt64(0), reader.GetString(1), reader.GetString(2));
+    }
+
+    public async Task RemoveVaultAsync(long vaultId)
+    {
+        using var _ = await AcquireAsync();
+        // FK ON DELETE CASCADE on notes(vault_id) takes the rest with it (tags,
+        // properties, links). The contentless FTS5 table is intentionally not
+        // touched here — its 'delete' syntax requires the original column
+        // values, which we don't keep around. Searches join notes_fts with
+        // notes(rowid), so orphaned FTS entries are invisible to queries.
+        using var del = Command("DELETE FROM vaults WHERE id = @vaultId", ("@vaultId", vaultId));
+        await del.ExecuteNonQueryAsync();
     }
 
     // -------------------------
@@ -126,6 +148,7 @@ public class IndexDb : IDisposable
 
     public async Task<Dictionary<string, long>> GetAllMtimesAsync(long vaultId)
     {
+        using var _ = await AcquireAsync();
         var result = new Dictionary<string, long>();
         using var cmd = Command(
             "SELECT path, mtime FROM notes WHERE vault_id = @vaultId",
@@ -138,6 +161,7 @@ public class IndexDb : IDisposable
 
     public async Task UpsertNotesAsync(long vaultId, IEnumerable<NoteDocument> notes)
     {
+        using var _ = await AcquireAsync();
         using var tx = _connection.BeginTransaction();
         try
         {
@@ -182,6 +206,7 @@ public class IndexDb : IDisposable
 
     public async Task DeleteNoteAsync(string path)
     {
+        using var _ = await AcquireAsync();
         using var tx = _connection.BeginTransaction();
         try
         {
@@ -216,11 +241,27 @@ public class IndexDb : IDisposable
 
     public async Task<List<string>> GetAllPathsAsync(long vaultId)
     {
+        using var _ = await AcquireAsync();
         var result = new List<string>();
         using var cmd = Command("SELECT path FROM notes WHERE vault_id = @vaultId", ("@vaultId", vaultId));
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             result.Add(reader.GetString(0));
+        return result;
+    }
+
+    public async Task<List<NoteSummary>> ListNotesAsync(long? vaultId = null)
+    {
+        using var _ = await AcquireAsync();
+        var result = new List<NoteSummary>();
+        using var cmd = vaultId is null
+            ? Command("SELECT path, name, mtime, size FROM notes ORDER BY mtime DESC")
+            : Command(
+                "SELECT path, name, mtime, size FROM notes WHERE vault_id = @vaultId ORDER BY mtime DESC",
+                ("@vaultId", vaultId.Value));
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            result.Add(new NoteSummary(reader.GetString(0), reader.GetString(1), reader.GetInt64(2), reader.GetInt64(3)));
         return result;
     }
 
@@ -233,6 +274,7 @@ public class IndexDb : IDisposable
         // Contentless FTS — get matching note paths, then build snippets from
         // disk in C#. Best-effort substring match against the raw query string;
         // works fine for plain queries, degrades for complex FTS expressions.
+        using var _ = await AcquireAsync();
         var matches = new List<(string Path, string Name)>();
         var sql = vaultId is null
             ? """
@@ -302,6 +344,7 @@ public class IndexDb : IDisposable
 
     public async Task<List<TagCount>> GetTagsAsync(long? vaultId = null)
     {
+        using var _ = await AcquireAsync();
         var result = new List<TagCount>();
         using var cmd = vaultId is null
             ? Command("SELECT tag, COUNT(*) FROM tags GROUP BY tag ORDER BY tag")
@@ -325,6 +368,7 @@ public class IndexDb : IDisposable
 
     public async Task<List<string>> GetBacklinksAsync(string path, long? vaultId = null)
     {
+        using var _ = await AcquireAsync();
         var result = new List<string>();
         using var cmd = vaultId is null
             ? Command("""
@@ -353,6 +397,7 @@ public class IndexDb : IDisposable
 
     public async Task SetLinkResolutionAsync(long sourceId, string targetText, long? resolvedId)
     {
+        using var _ = await AcquireAsync();
         await ExecuteAsync("""
             UPDATE links SET resolved_id = @resolvedId
             WHERE source_id = @sourceId AND target_path = @targetText
@@ -364,6 +409,7 @@ public class IndexDb : IDisposable
 
     public async Task<List<UnresolvedLink>> GetUnresolvedLinksAsync(long vaultId)
     {
+        using var _ = await AcquireAsync();
         var result = new List<UnresolvedLink>();
         using var cmd = Command("""
             SELECT l.source_id, n.path, l.target_path
@@ -379,6 +425,7 @@ public class IndexDb : IDisposable
 
     public async Task<long?> GetNoteIdAsync(string path)
     {
+        using var _ = await AcquireAsync();
         using var cmd = Command("SELECT id FROM notes WHERE path = @path", ("@path", path));
         var result = await cmd.ExecuteScalarAsync();
         return result is long id ? id : null;
@@ -386,6 +433,7 @@ public class IndexDb : IDisposable
 
     public async Task<List<string>> GetNotePathsByNameAsync(long vaultId, string name)
     {
+        using var _ = await AcquireAsync();
         var result = new List<string>();
         using var cmd = Command(
             "SELECT path FROM notes WHERE vault_id = @vaultId AND name = @name COLLATE NOCASE",
@@ -401,6 +449,7 @@ public class IndexDb : IDisposable
 
     public async Task<List<PropertyEntry>> GetPropertiesAsync(long noteId)
     {
+        using var _ = await AcquireAsync();
         var result = new List<PropertyEntry>();
         using var cmd = Command(
             "SELECT key, value FROM properties WHERE note_id = @noteId ORDER BY key",
@@ -413,6 +462,7 @@ public class IndexDb : IDisposable
 
     public async Task<string?> GetPropertyAsync(long noteId, string key)
     {
+        using var _ = await AcquireAsync();
         using var cmd = Command(
             "SELECT value FROM properties WHERE note_id = @noteId AND key = @key",
             ("@noteId", noteId), ("@key", key));
@@ -498,6 +548,23 @@ public class IndexDb : IDisposable
         ins.Parameters.AddWithValue("@name", name);
         ins.Parameters.AddWithValue("@body", body);
         await ins.ExecuteNonQueryAsync();
+    }
+
+    private async Task<IDisposable> AcquireAsync()
+    {
+        await _gate.WaitAsync();
+        return new Releaser(_gate);
+    }
+
+    private sealed class Releaser : IDisposable
+    {
+        private SemaphoreSlim? _gate;
+        public Releaser(SemaphoreSlim gate) => _gate = gate;
+        public void Dispose()
+        {
+            var g = Interlocked.Exchange(ref _gate, null);
+            g?.Release();
+        }
     }
 
     private void Execute(string sql)

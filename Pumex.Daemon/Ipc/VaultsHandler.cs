@@ -46,3 +46,34 @@ public class VaultAddHandler : ICommandHandler
         return vault;
     }
 }
+
+public class VaultRemoveHandler : ICommandHandler
+{
+    private readonly IndexDb _db;
+    private readonly VaultIndexingOrchestrator _orchestrator;
+
+    public string Command => "vault:remove";
+
+    public VaultRemoveHandler(IndexDb db, VaultIndexingOrchestrator orchestrator)
+    {
+        _db = db;
+        _orchestrator = orchestrator;
+    }
+
+    public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
+    {
+        var name = request.Require("name");
+        var vault = await _db.GetVaultByNameAsync(name)
+            ?? throw new ArgumentException($"vault not found: {name}");
+
+        // Stop the indexer first so the watcher releases its file handles
+        // before we drop the DB rows.
+        await _orchestrator.RemoveVaultAsync(vault.Id);
+        await _db.RemoveVaultAsync(vault.Id);
+
+        // We deliberately do not delete the on-disk .pumex/ marker — the user's
+        // notes stay intact. Re-registering with `vault add` reuses the same
+        // marker without surprises.
+        return vault;
+    }
+}

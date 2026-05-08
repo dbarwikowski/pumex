@@ -174,12 +174,13 @@ public static class Commands
 
     public static async Task<int> VaultAsync(IpcClient client, string[] args)
     {
-        if (args.Length < 1) return Usage("pumex vault add <name> <path>");
+        if (args.Length < 1) return Usage("pumex vault <add|remove> ...");
 
         return args[0] switch
         {
-            "add" => await VaultAddAsync(client, args[1..]),
-            _ => Usage("pumex vault add <name> <path>"),
+            "add"    => await VaultAddAsync(client, args[1..]),
+            "remove" => await VaultRemoveAsync(client, args[1..]),
+            _        => Usage("pumex vault <add|remove> ..."),
         };
     }
 
@@ -202,17 +203,76 @@ public static class Commands
         return 0;
     }
 
+    private static async Task<int> VaultRemoveAsync(IpcClient client, string[] args)
+    {
+        if (args.Length < 1) return Usage("pumex vault remove <name>");
+
+        var resp = await client.SendAsync<VaultRecord>("vault:remove", new() { ["name"] = args[0] });
+        if (!resp.Success) return Error(resp.Error);
+
+        var v = resp.Data!;
+        AnsiConsole.MarkupLine($"[green]removed[/] vault [bold]{v.Name.EscapeMarkup()}[/] (notes on disk untouched at {v.Path.EscapeMarkup()})");
+        return 0;
+    }
+
     public static async Task<int> NoteAsync(IpcClient client, string[] args)
     {
-        if (args.Length == 0) return Usage("pumex note <read|create|append> ...");
+        if (args.Length == 0) return Usage("pumex note <read|create|append|delete|list> ...");
 
         return args[0] switch
         {
-            "read" => await NoteReadAsync(client, args[1..]),
+            "read"   => await NoteReadAsync(client, args[1..]),
             "create" => await NoteWriteAsync(client, args[1..], "note:create"),
             "append" => await NoteWriteAsync(client, args[1..], "note:append"),
-            _ => Usage("pumex note <read|create|append> ..."),
+            "delete" => await NoteDeleteAsync(client, args[1..]),
+            "list"   => await NoteListAsync(client, args[1..]),
+            _        => Usage("pumex note <read|create|append|delete|list> ..."),
         };
+    }
+
+    private static async Task<int> NoteDeleteAsync(IpcClient client, string[] args)
+    {
+        var (scope, rest) = VaultArgs.Extract(args);
+        if (rest.Length == 0) return Usage("pumex note delete <path-or-name> [--vault NAME | --vault-path PATH]");
+
+        var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, rest[0]) };
+        scope.ApplyTo(requestArgs);
+
+        var resp = await client.SendAsync<NotePathResult>("note:delete", requestArgs);
+        if (!resp.Success) return Error(resp.Error);
+
+        AnsiConsole.MarkupLine($"[green]deleted[/] {resp.Data!.Path.EscapeMarkup()}");
+        return 0;
+    }
+
+    private static async Task<int> NoteListAsync(IpcClient client, string[] args)
+    {
+        var (scope, _) = VaultArgs.Extract(args);
+        var requestArgs = new Dictionary<string, string>();
+        scope.ApplyTo(requestArgs);
+
+        var resp = await client.SendAsync<List<NoteSummary>>("note:list", requestArgs);
+        if (!resp.Success) return Error(resp.Error);
+
+        var notes = resp.Data ?? [];
+        if (notes.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[dim]no notes[/]");
+            return 0;
+        }
+
+        var table = new Table().Border(TableBorder.Minimal);
+        table.AddColumn("Name");
+        table.AddColumn("Path");
+        table.AddColumn(new TableColumn("Modified").RightAligned());
+        foreach (var n in notes)
+        {
+            var when = DateTimeOffset.FromUnixTimeSeconds(n.Mtime).LocalDateTime.ToString("yyyy-MM-dd HH:mm");
+            table.AddRow(n.Name.EscapeMarkup(), n.Path.EscapeMarkup(), when);
+        }
+
+        AnsiConsole.Write(table);
+        return 0;
     }
 
     private static async Task<int> NoteReadAsync(IpcClient client, string[] args)
