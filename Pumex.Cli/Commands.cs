@@ -358,6 +358,86 @@ public static class Commands
         return 0;
     }
 
+    public static async Task<int> DailyAsync(IpcClient client, string[] args)
+    {
+        // `pumex daily` (no subcommand) is shorthand for `daily read`.
+        if (args.Length == 0 || args[0].StartsWith("--") || args[0] == "read")
+            return await DailyReadAsync(client, args.Length > 0 && args[0] == "read" ? args[1..] : args);
+        if (args[0] == "append")
+            return await DailyAppendAsync(client, args[1..]);
+        return Usage("pumex daily [read|append] [--date YYYY-MM-DD] ...");
+    }
+
+    private static async Task<int> DailyReadAsync(IpcClient client, string[] args)
+    {
+        var (scope, rest) = VaultArgs.Extract(args);
+        var date = ExtractFlagValue(rest, "--date");
+
+        var requestArgs = new Dictionary<string, string>();
+        scope.ApplyTo(requestArgs);
+        if (date is not null) requestArgs["date"] = date;
+
+        var resp = await client.SendAsync<NoteContent>("daily:read", requestArgs);
+        if (!resp.Success) return Error(resp.Error);
+
+        var note = resp.Data!;
+        AnsiConsole.MarkupLine($"[dim]{note.Path.EscapeMarkup()}[/]");
+        AnsiConsole.WriteLine();
+        AnsiConsole.WriteLine(string.IsNullOrWhiteSpace(note.Body) ? "(empty)" : note.Body);
+        return 0;
+    }
+
+    private static async Task<int> DailyAppendAsync(IpcClient client, string[] args)
+    {
+        var (scope, rest) = VaultArgs.Extract(args);
+        var date = ExtractFlagValue(rest, "--date");
+        string? content = null;
+        var inline = false;
+        for (var i = 0; i < rest.Length; i++)
+        {
+            switch (rest[i])
+            {
+                case "--content" when i + 1 < rest.Length:
+                    content = rest[++i];
+                    break;
+                case "--stdin":
+                    content = await Console.In.ReadToEndAsync();
+                    break;
+                case "--inline":
+                    inline = true;
+                    break;
+            }
+        }
+
+        if (content is null && !Console.IsInputRedirected)
+        {
+            AnsiConsole.MarkupLine("[yellow]error:[/] no content. Use [bold]--content TEXT[/] or pipe via [bold]--stdin[/].");
+            return 64;
+        }
+        content ??= await Console.In.ReadToEndAsync();
+
+        var requestArgs = new Dictionary<string, string>
+        {
+            ["content"] = content,
+        };
+        scope.ApplyTo(requestArgs);
+        if (date is not null) requestArgs["date"] = date;
+        if (inline) requestArgs["inline"] = "true";
+
+        var resp = await client.SendAsync<NotePathResult>("daily:append", requestArgs);
+        if (!resp.Success) return Error(resp.Error);
+
+        AnsiConsole.MarkupLine($"[green]appended[/] {resp.Data!.Path.EscapeMarkup()}");
+        return 0;
+    }
+
+    private static string? ExtractFlagValue(string[] args, string flag)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+            if (args[i] == flag) return args[i + 1];
+        return null;
+    }
+
     public static async Task<int> PropertyAsync(IpcClient client, string[] args)
     {
         if (args.Length == 0) return Usage("pumex property <list|get|set> ...");

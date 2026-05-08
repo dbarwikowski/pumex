@@ -28,7 +28,7 @@ public class PropertyHandlersTests : IDisposable
     public async Task PropertySet_adds_frontmatter_when_note_has_none()
     {
         var path = _vault.WriteNote("plain.md", "# Plain\n\nbody only\n");
-        var handler = new PropertySetHandler(_db);
+        var handler = new PropertySetHandler(_db, new NoteParser());
 
         await handler.HandleAsync(Req("property:set",
             ("path", path), ("key", "status"), ("value", "draft")), CancellationToken.None);
@@ -44,7 +44,7 @@ public class PropertyHandlersTests : IDisposable
     public async Task PropertySet_updates_existing_key_in_place()
     {
         var path = _vault.WriteNote("note.md", "---\nstatus: draft\ntitle: Hello\n---\n\nbody\n");
-        var handler = new PropertySetHandler(_db);
+        var handler = new PropertySetHandler(_db, new NoteParser());
 
         await handler.HandleAsync(Req("property:set",
             ("path", path), ("key", "status"), ("value", "published")), CancellationToken.None);
@@ -60,7 +60,7 @@ public class PropertyHandlersTests : IDisposable
     public async Task PropertySet_adds_new_key_to_existing_frontmatter()
     {
         var path = _vault.WriteNote("note.md", "---\ntitle: Hello\n---\n\nbody\n");
-        var handler = new PropertySetHandler(_db);
+        var handler = new PropertySetHandler(_db, new NoteParser());
 
         await handler.HandleAsync(Req("property:set",
             ("path", path), ("key", "priority"), ("value", "high")), CancellationToken.None);
@@ -73,7 +73,7 @@ public class PropertyHandlersTests : IDisposable
     [Fact]
     public async Task PropertySet_throws_on_missing_file()
     {
-        var handler = new PropertySetHandler(_db);
+        var handler = new PropertySetHandler(_db, new NoteParser());
         var ghostPath = Path.Combine(_vault.Path, "ghost.md");
 
         await Assert.ThrowsAsync<FileNotFoundException>(async () => await handler.HandleAsync(

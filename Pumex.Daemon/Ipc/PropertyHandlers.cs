@@ -51,10 +51,15 @@ public class PropertyGetHandler : ICommandHandler
 public class PropertySetHandler : ICommandHandler
 {
     private readonly IndexDb _db;
+    private readonly NoteParser _parser;
 
     public string Command => "property:set";
 
-    public PropertySetHandler(IndexDb db) => _db = db;
+    public PropertySetHandler(IndexDb db, NoteParser parser)
+    {
+        _db = db;
+        _parser = parser;
+    }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
@@ -74,7 +79,7 @@ public class PropertySetHandler : ICommandHandler
 
         var newContent = SerializeWithFrontmatter(frontmatter, body);
         await File.WriteAllTextAsync(path, newContent, ct);
-        // Watcher will reindex.
+        if (vault is not null) await InlineIndex.UpsertAsync(_db, _parser, vault.Id, path);
         return new NotePathResult(path);
     }
 

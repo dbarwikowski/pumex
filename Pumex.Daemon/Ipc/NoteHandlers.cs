@@ -39,10 +39,15 @@ public class NoteReadHandler : ICommandHandler
 public class NoteCreateHandler : ICommandHandler
 {
     private readonly IndexDb _db;
+    private readonly NoteParser _parser;
 
     public string Command => "note:create";
 
-    public NoteCreateHandler(IndexDb db) => _db = db;
+    public NoteCreateHandler(IndexDb db, NoteParser parser)
+    {
+        _db = db;
+        _parser = parser;
+    }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
@@ -58,7 +63,41 @@ public class NoteCreateHandler : ICommandHandler
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
         await File.WriteAllTextAsync(path, content, ct);
-        // Watcher will pick this up; no need to notify the index synchronously.
+        if (vault is not null) await InlineIndex.UpsertAsync(_db, _parser, vault.Id, path);
+        return new NotePathResult(path);
+    }
+}
+
+public class NoteAppendHandler : ICommandHandler
+{
+    private readonly IndexDb _db;
+    private readonly NoteParser _parser;
+
+    public string Command => "note:append";
+
+    public NoteAppendHandler(IndexDb db, NoteParser parser)
+    {
+        _db = db;
+        _parser = parser;
+    }
+
+    public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
+    {
+        var vault = await request.ResolveVaultAsync(_db);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
+        var content = request.Optional("content") ?? "";
+        var inline = request.Flag("inline");
+
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"Note not found: {path}");
+
+        var existing = await File.ReadAllTextAsync(path, ct);
+
+        var prefix = (inline || existing.Length == 0 || existing.EndsWith('\n')) ? "" : "\n";
+        var suffix = content.EndsWith('\n') ? "" : "\n";
+
+        await File.AppendAllTextAsync(path, prefix + content + suffix, ct);
+        if (vault is not null) await InlineIndex.UpsertAsync(_db, _parser, vault.Id, path);
         return new NotePathResult(path);
     }
 }
@@ -95,35 +134,7 @@ public class NoteDeleteHandler : ICommandHandler
             throw new FileNotFoundException($"Note not found: {path}");
 
         File.Delete(path);
-        // Watcher catches the deletion and reindexes; no synchronous DB call here.
-        return new NotePathResult(path);
-    }
-}
-
-public class NoteAppendHandler : ICommandHandler
-{
-    private readonly IndexDb _db;
-
-    public string Command => "note:append";
-
-    public NoteAppendHandler(IndexDb db) => _db = db;
-
-    public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
-    {
-        var vault = await request.ResolveVaultAsync(_db);
-        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
-        var content = request.Optional("content") ?? "";
-        var inline = request.Flag("inline");
-
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"Note not found: {path}");
-
-        var existing = await File.ReadAllTextAsync(path, ct);
-
-        var prefix = (inline || existing.Length == 0 || existing.EndsWith('\n')) ? "" : "\n";
-        var suffix = content.EndsWith('\n') ? "" : "\n";
-
-        await File.AppendAllTextAsync(path, prefix + content + suffix, ct);
+        await InlineIndex.DeleteAsync(_db, path);
         return new NotePathResult(path);
     }
 }
