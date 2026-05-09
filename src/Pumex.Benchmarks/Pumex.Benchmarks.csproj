@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Pumex.Daemon\Pumex.Daemon.csproj" />
+    <ProjectReference Include="..\Pumex.Daemon\Pumex.Daemon.csproj" />
   </ItemGroup>
 
   <ItemGroup>

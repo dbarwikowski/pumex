@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Pumex.Contracts\Pumex.Contracts.csproj" />
+    <ProjectReference Include="..\Pumex.Contracts\Pumex.Contracts.csproj" />
   </ItemGroup>
 
 </Project>
