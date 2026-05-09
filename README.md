@@ -30,10 +30,7 @@ pumex daemon install      # registers the daemon as a systemd user service / lau
 
 ```powershell
 iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.ps1 | iex
-[Environment]::SetEnvironmentVariable('PATH', "$HOME\.pumex\bin;$([Environment]::GetEnvironmentVariable('PATH','User'))", 'User')
-$env:PATH = "$HOME\.pumex\bin;$env:PATH"   # also add to the current session
-# In an elevated shell:
-pumex daemon install      # registers the daemon as a Windows service
+# PATH is updated automatically. For the daemon service, run the above in an elevated shell.
 ```
 
 The installer downloads the right binary for your OS + arch from the latest GitHub Release and drops it into `~/.pumex/bin/`. Pin a version with `PUMEX_VERSION=v0.2.0` (or `$env:PUMEX_VERSION` on Windows).

@@ -1,5 +1,5 @@
-# Pumex installer — downloads the latest release for this platform and drops
-# pumex.exe + pumex-daemon.exe into $HOME\.pumex\bin\.
+# Pumex installer — downloads the latest release for this platform, drops
+# pumex.exe + pumex-daemon.exe into $HOME\.pumex\bin\, and adds that to PATH.
 #
 # Usage:    iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.ps1 | iex
 # Pinning:  $env:PUMEX_VERSION = 'v0.2.0'; iwr ... | iex
@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 
 $Repo    = if ($env:PUMEX_REPO)    { $env:PUMEX_REPO }    else { 'dbarwikowski/pumex' }
 $Version = if ($env:PUMEX_VERSION) { $env:PUMEX_VERSION } else { 'latest' }
-$BinDir  = if ($env:PUMEX_BIN_DIR) { $env:PUMEX_BIN_DIR } else { Join-Path $HOME '.pumex/bin' }
+$BinDir  = if ($env:PUMEX_BIN_DIR) { $env:PUMEX_BIN_DIR } else { Join-Path $HOME '.pumex\bin' }
 
 # ---- Detect arch ----
 $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
@@ -40,14 +40,27 @@ finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
 
-# ---- Hints ----
-Write-Host ""
-Write-Host "Installed:"
-Write-Host "  $BinDir\pumex.exe"
-Write-Host "  $BinDir\pumex-daemon.exe"
-Write-Host ""
-Write-Host "Add to PATH (current session):"
-Write-Host "  `$env:PATH = `"$BinDir;`$env:PATH`""
-Write-Host ""
-Write-Host "Then install the daemon as a Windows service (requires admin):"
-Write-Host "  pumex daemon install"
+Write-Host "Installed to $BinDir"
+
+# ---- Add to PATH (user, permanent) ----
+$userPath = [Environment]::GetEnvironmentVariable('PATH', 'User') ?? ''
+if ($userPath -notlike "*$BinDir*") {
+    [Environment]::SetEnvironmentVariable('PATH', "$BinDir;$userPath", 'User')
+    Write-Host "Added $BinDir to your user PATH"
+} else {
+    Write-Host "$BinDir already in PATH"
+}
+$env:PATH = "$BinDir;$env:PATH"
+
+# ---- Install daemon service if running as admin ----
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if ($isAdmin) {
+    Write-Host "Installing pumex-daemon as a Windows service..."
+    & "$BinDir\pumex.exe" daemon install
+} else {
+    Write-Host ""
+    Write-Host "To register the daemon as a Windows service, run in an elevated shell:"
+    Write-Host "  pumex daemon install"
+}
