@@ -22,8 +22,7 @@ Not yet shipped: plugin SDK, IPC auth. See `pumex --help` for the current comman
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.sh | sh
-export PATH="$HOME/.pumex/bin:$PATH"
-pumex daemon install      # registers the daemon as a systemd user service / launchd agent
+# PATH and daemon service are configured automatically.
 ```
 
 **Windows (PowerShell):**

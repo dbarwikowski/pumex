@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
-# Pumex installer — downloads the latest release for this platform and drops
-# `pumex` + `pumex-daemon` into ~/.pumex/bin/.
+# Pumex installer — downloads the latest release, installs to ~/.pumex/bin/,
+# adds to PATH, and registers the daemon service.
 #
-# Usage:   curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/install.sh | sh
+# Usage:   curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.sh | sh
 # Pinning: PUMEX_VERSION=v0.2.0 sh install.sh
 
 set -eu
@@ -26,7 +26,6 @@ esac
 
 rid="${os}-${arch}"
 asset="pumex-${rid}.tar.gz"
-
 if [ "$VERSION" = "latest" ]; then
     url="https://github.com/${REPO}/releases/latest/download/${asset}"
 else
@@ -38,28 +37,37 @@ mkdir -p "$BIN_DIR"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-echo "Downloading $asset from $url..."
+echo "Downloading $asset..."
 if command -v curl >/dev/null 2>&1; then
     curl -fSL --progress-bar -o "$tmp/$asset" "$url"
 elif command -v wget >/dev/null 2>&1; then
-    wget -q --show-progress -O "$tmp/$asset" "$url"
+    wget -q -O "$tmp/$asset" "$url"
 else
-    echo "error: need curl or wget on PATH" >&2; exit 1
+    echo "error: curl or wget is required" >&2; exit 1
 fi
 
 tar -xzf "$tmp/$asset" -C "$BIN_DIR"
 chmod +x "$BIN_DIR/pumex" "$BIN_DIR/pumex-daemon"
+echo "Installed to $BIN_DIR"
 
-# ---- Hints ----
-cat <<EOF
+# ---- Add to PATH (permanent, deduplicated) ----
+add_to_path() {
+    [ -f "$1" ] || return 0
+    grep -qF "$BIN_DIR" "$1" && return 0
+    printf '\nexport PATH="%s:$PATH"\n' "$BIN_DIR" >> "$1"
+    echo "Added $BIN_DIR to PATH in $1"
+}
 
-Installed:
-  $BIN_DIR/pumex
-  $BIN_DIR/pumex-daemon
+add_to_path "$HOME/.profile"
+add_to_path "$HOME/.bashrc"
+add_to_path "$HOME/.zshrc"
+export PATH="$BIN_DIR:$PATH"
 
-Add to PATH (current shell):
-  export PATH="$BIN_DIR:\$PATH"
-
-Then install the daemon as a service:
-  pumex daemon install
-EOF
+# ---- Install daemon service ----
+if "$BIN_DIR/pumex" daemon install; then
+    : # daemon reported its own success
+else
+    echo ""
+    echo "Could not register daemon service (systemd/launchd not available?)."
+    echo "Run manually when ready:  pumex daemon install"
+fi
