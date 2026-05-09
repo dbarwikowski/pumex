@@ -2,7 +2,7 @@
 # Pumex uninstaller — removes the service registration and binaries.
 # Data in ~/.pumex/ is kept unless PUMEX_PURGE=1.
 #
-# Usage:   curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/uninstall.sh | sh
+# Usage:   curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/master/uninstall.sh | sh
 # Purge:   PUMEX_PURGE=1 curl -fsSL ... | sh
 
 set -eu

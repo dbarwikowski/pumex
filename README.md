@@ -21,14 +21,14 @@ Not yet shipped: plugin SDK, IPC auth. See `pumex --help` for the current comman
 **Linux / macOS:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/install.sh | sh
 # PATH and daemon service are configured automatically.
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.ps1 | iex
+iwr https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/install.ps1 | iex
 # PATH is updated automatically. For the daemon service, run the above in an elevated shell.
 ```
 
@@ -39,14 +39,14 @@ The installer downloads the right binary for your OS + arch from the latest GitH
 **Linux / macOS:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/uninstall.sh | sh
+curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/uninstall.sh | sh
 # Add PUMEX_PURGE=1 to also delete ~/.pumex/ (index, config).
 ```
 
 **Windows (PowerShell, elevated for service removal):**
 
 ```powershell
-iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/uninstall.ps1 | iex
+iwr https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/uninstall.ps1 | iex
 # Add $env:PUMEX_PURGE = '1' to also delete $HOME\.pumex\ (index, config).
 ```
 

@@ -2,7 +2,7 @@
 # Pumex installer — downloads the latest release, installs to ~/.pumex/bin/,
 # adds to PATH, and registers the daemon service.
 #
-# Usage:   curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.sh | sh
+# Usage:   curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/install.sh | sh
 # Pinning: PUMEX_VERSION=v0.2.0 sh install.sh
 
 set -eu

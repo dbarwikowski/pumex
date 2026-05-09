@@ -1,7 +1,7 @@
 # Pumex uninstaller — removes the service registration and binaries.
 # Data in $HOME\.pumex\ is kept unless -Purge is given.
 #
-# Usage:    iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/uninstall.ps1 | iex
+# Usage:    iwr https://raw.githubusercontent.com/dbarwikowski/pumex/master/uninstall.ps1 | iex
 # Purge:    $env:PUMEX_PURGE = '1'; iwr ... | iex
 # Dev:      .\uninstall.ps1 -Purge
 
