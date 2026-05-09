@@ -46,6 +46,25 @@ else
     echo "error: curl or wget is required" >&2; exit 1
 fi
 
+PLIST_LINUX="$HOME/.config/systemd/user/pumex.service"
+PLIST_MAC="$HOME/Library/LaunchAgents/com.pumex.daemon.plist"
+
+# ---- Stop service before replacing binaries (avoids "text busy" / locked file) ----
+SERVICE_STOPPED=0
+if [ "$os" = "linux" ]; then
+    if systemctl --user is-active --quiet pumex 2>/dev/null; then
+        echo "Stopping pumex service..."
+        systemctl --user stop pumex
+        SERVICE_STOPPED=1
+    fi
+elif [ "$os" = "osx" ]; then
+    if [ -f "$PLIST_MAC" ] && launchctl list com.pumex.daemon >/dev/null 2>&1; then
+        echo "Stopping pumex service..."
+        launchctl unload "$PLIST_MAC"
+        SERVICE_STOPPED=1
+    fi
+fi
+
 tar -xzf "$tmp/$asset" -C "$BIN_DIR"
 chmod +x "$BIN_DIR/pumex" "$BIN_DIR/pumex-daemon"
 echo "Installed to $BIN_DIR"
@@ -63,11 +82,21 @@ add_to_path "$HOME/.bashrc"
 add_to_path "$HOME/.zshrc"
 export PATH="$BIN_DIR:$PATH"
 
-# ---- Install daemon service ----
-if "$BIN_DIR/pumex" daemon install; then
-    : # daemon reported its own success
-else
-    echo ""
-    echo "Could not register daemon service (systemd/launchd not available?)."
-    echo "Run manually when ready:  pumex daemon install"
+# ---- Restart or first-install the daemon service ----
+if [ "$SERVICE_STOPPED" = "1" ]; then
+    echo "Restarting pumex service..."
+    if [ "$os" = "linux" ]; then
+        systemctl --user start pumex
+    elif [ "$os" = "osx" ]; then
+        launchctl load "$PLIST_MAC"
+    fi
+elif { [ "$os" = "linux" ] && [ ! -f "$PLIST_LINUX" ]; } || \
+     { [ "$os" = "osx" ]   && [ ! -f "$PLIST_MAC" ]; }; then
+    if "$BIN_DIR/pumex" daemon install; then
+        : # daemon reported its own success
+    else
+        echo ""
+        echo "Could not register daemon service (systemd/launchd not available?)."
+        echo "Run manually when ready:  pumex daemon install"
+    fi
 fi
