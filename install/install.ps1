@@ -28,7 +28,7 @@ $url = if ($Version -eq 'latest') {
     "https://github.com/$Repo/releases/download/$Version/$asset"
 }
 
-# ---- Stop service before replacing locked binaries ----
+# ---- Stop daemon before replacing locked binaries ----
 $service = Get-Service -Name 'pumex' -ErrorAction SilentlyContinue
 $serviceWasRunning = $service -and $service.Status -ne 'Stopped'
 if ($serviceWasRunning) {
@@ -39,6 +39,15 @@ if ($serviceWasRunning) {
     }
     Write-Host "Stopping pumex service..."
     Stop-Service -Name 'pumex' -Force
+}
+
+# Kill any remaining process — handles foreground runs and the brief window
+# after Stop-Service returns before the OS releases the file handle.
+$proc = Get-Process -Name 'pumex-daemon' -ErrorAction SilentlyContinue
+if ($proc) {
+    Write-Host "Waiting for pumex-daemon to exit..."
+    $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+    $proc | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
 }
 
 # ---- Download + extract ----
