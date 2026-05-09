@@ -332,7 +332,7 @@ public static class Commands
         if (note.Tags.Count > 0)
             AnsiConsole.MarkupLine("[dim]tags:[/] " + string.Join(" ", note.Tags.Select(t => $"[blue]#{t.EscapeMarkup()}[/]")));
         AnsiConsole.WriteLine();
-        AnsiConsole.WriteLine(note.Body);
+        MarkdownRenderer.Render(note.Body);
         return 0;
     }
 
