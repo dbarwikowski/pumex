@@ -44,7 +44,8 @@ Write-Host "Installed to $BinDir"
 
 # ---- Add to PATH (user, permanent) ----
 $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User') ?? ''
-if ($userPath -notlike "*$BinDir*") {
+$entries  = $userPath -split ';' | Where-Object { $_ -ne '' }
+if ($BinDir -notin $entries) {
     [Environment]::SetEnvironmentVariable('PATH', "$BinDir;$userPath", 'User')
     Write-Host "Added $BinDir to your user PATH"
 } else {
