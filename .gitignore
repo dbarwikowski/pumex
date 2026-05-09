@@ -32,7 +32,4 @@ Thumbs.db
 # Local-only docs and Claude Code state
 .claude/
 CLAUDE.md
-dev/
-
-# In-repo vault (not committed)
 vault/
