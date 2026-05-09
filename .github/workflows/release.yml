@@ -56,14 +56,14 @@ jobs:
       - name: Publish CLI
         shell: bash
         run: |
-          dotnet publish Pumex.Cli -c Release -r ${{ matrix.rid }} \
+          dotnet publish src/Pumex.Cli -c Release -r ${{ matrix.rid }} \
             --self-contained -p:PublishSingleFile=true \
             -o publish/${{ matrix.rid }}
 
       - name: Publish daemon
         shell: bash
         run: |
-          dotnet publish Pumex.Daemon -c Release -r ${{ matrix.rid }} \
+          dotnet publish src/Pumex.Daemon -c Release -r ${{ matrix.rid }} \
             --self-contained -p:PublishSingleFile=true \
             -o publish/${{ matrix.rid }}
 

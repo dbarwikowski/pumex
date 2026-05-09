@@ -1,25 +1,23 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.4.11605.240
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Daemon", "Pumex.Daemon\Pumex.Daemon.csproj", "{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Daemon", "src\Pumex.Daemon\Pumex.Daemon.csproj", "{3E818528-1F8F-70E3-7BEC-47C7D92BB46F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Contracts", "Pumex.Contracts\Pumex.Contracts.csproj", "{74B32D77-9722-4FA6-977B-8EE468F9E3A4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Contracts", "src\Pumex.Contracts\Pumex.Contracts.csproj", "{74B32D77-9722-4FA6-977B-8EE468F9E3A4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Cli", "Pumex.Cli\Pumex.Cli.csproj", "{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Cli", "src\Pumex.Cli\Pumex.Cli.csproj", "{6D80E461-2BC6-4D4E-98DF-4F1293A1F925}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Contracts.Tests", "src\Pumex.Contracts.Tests\Pumex.Contracts.Tests.csproj", "{245AE8A9-7911-4793-B760-83742CA657C7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Contracts.Tests", "tests\Pumex.Contracts.Tests\Pumex.Contracts.Tests.csproj", "{245AE8A9-7911-4793-B760-83742CA657C7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Daemon.Tests", "src\Pumex.Daemon.Tests\Pumex.Daemon.Tests.csproj", "{7B646F34-CBF9-4122-AB20-FF03A64D1EA1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Daemon.Tests", "tests\Pumex.Daemon.Tests\Pumex.Daemon.Tests.csproj", "{7B646F34-CBF9-4122-AB20-FF03A64D1EA1}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Cli.Tests", "src\Pumex.Cli.Tests\Pumex.Cli.Tests.csproj", "{A33943F0-E384-4DDE-A9B0-7B35ECB55B67}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Cli.Tests", "tests\Pumex.Cli.Tests\Pumex.Cli.Tests.csproj", "{A33943F0-E384-4DDE-A9B0-7B35ECB55B67}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Daemon.IntegrationTests", "src\Pumex.Daemon.IntegrationTests\Pumex.Daemon.IntegrationTests.csproj", "{B2581C5D-4620-4894-84FB-AD1F7BB7E20A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Daemon.IntegrationTests", "tests\Pumex.Daemon.IntegrationTests\Pumex.Daemon.IntegrationTests.csproj", "{B2581C5D-4620-4894-84FB-AD1F7BB7E20A}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Benchmarks", "tests\Pumex.Benchmarks\Pumex.Benchmarks.csproj", "{D243129E-541F-4449-88BD-3B8B19F6FDCF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Benchmarks", "src\Pumex.Benchmarks\Pumex.Benchmarks.csproj", "{D243129E-541F-4449-88BD-3B8B19F6FDCF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -130,13 +128,6 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
-		{245AE8A9-7911-4793-B760-83742CA657C7} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
-		{7B646F34-CBF9-4122-AB20-FF03A64D1EA1} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
-		{A33943F0-E384-4DDE-A9B0-7B35ECB55B67} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
-		{B2581C5D-4620-4894-84FB-AD1F7BB7E20A} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
-		{D243129E-541F-4449-88BD-3B8B19F6FDCF} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EDAB22F8-FC1E-4783-8F9F-185A84D67995}

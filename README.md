@@ -21,7 +21,7 @@ Not yet shipped: plugin SDK, IPC auth. See `pumex --help` for the current comman
 **Linux / macOS:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.sh | sh
 export PATH="$HOME/.pumex/bin:$PATH"
 pumex daemon install      # registers the daemon as a systemd user service / launchd agent
 ```
@@ -29,7 +29,7 @@ pumex daemon install      # registers the daemon as a systemd user service / lau
 **Windows (PowerShell):**
 
 ```powershell
-iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/install.ps1 | iex
+iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.ps1 | iex
 $env:PATH = "$HOME\.pumex\bin;$env:PATH"
 # In an elevated shell:
 pumex daemon install      # registers the daemon as a Windows service
@@ -42,14 +42,14 @@ The installer downloads the right binary for your OS + arch from the latest GitH
 **Linux / macOS:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/uninstall.sh | sh
+curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/uninstall.sh | sh
 # Add PUMEX_PURGE=1 to also delete ~/.pumex/ (index, config).
 ```
 
 **Windows (PowerShell, elevated for service removal):**
 
 ```powershell
-iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/uninstall.ps1 | iex
+iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/uninstall.ps1 | iex
 # Add $env:PUMEX_PURGE = '1' to also delete $HOME\.pumex\ (index, config).
 ```
 
@@ -124,7 +124,7 @@ The split is deliberate: the daemon does all the heavy work once and serves chea
 
 ## Performance
 
-Targets for a 10 000-file vault, measured with BenchmarkDotNet (`tests/Pumex.Benchmarks`):
+Targets for a 10 000-file vault, measured with BenchmarkDotNet (`src/Pumex.Benchmarks`):
 
 | Operation | Budget | Measured @ 10k |
 |---|---:|---:|
@@ -133,7 +133,7 @@ Targets for a 10 000-file vault, measured with BenchmarkDotNet (`tests/Pumex.Ben
 | FTS search | <50 ms | ~20 ms |
 | Incremental update (per file event) | <10 ms | 3.3 ms |
 
-Run them yourself: `dotnet run -c Release --project tests/Pumex.Benchmarks`.
+Run them yourself: `dotnet run -c Release --project src/Pumex.Benchmarks`.
 
 ¹ Reduced from 6.1 s after eliminating ~100k `SqliteCommand` re-preparations per scan via command reuse across the upsert transaction.
 
@@ -143,10 +143,11 @@ Run them yourself: `dotnet run -c Release --project tests/Pumex.Benchmarks`.
 
 | Directory | Role |
 |---|---|
-| `Pumex.Daemon/` | Indexer, IPC server, command handlers, SQLite via FTS5 |
-| `Pumex.Contracts/` | DTOs, `PumexPaths`, `IpcRequest/Response`. Zero external deps. |
-| `Pumex.Cli/` | Thin CLI — Spectre.Console + named-pipe client. References `Pumex.Contracts` only. |
-| `tests/` | Unit tests (`Pumex.Daemon.Tests`), integration tests, benchmarks |
+| `src/Pumex.Daemon/` | Indexer, IPC server, command handlers, SQLite via FTS5 |
+| `src/Pumex.Contracts/` | DTOs, `PumexPaths`, `IpcRequest/Response`. Zero external deps. |
+| `src/Pumex.Cli/` | Thin CLI — Spectre.Console + named-pipe client. References `Pumex.Contracts` only. |
+| `src/Pumex.*.Tests/` | Unit tests, integration tests, benchmarks |
+| `install/` | Install / uninstall scripts for Linux, macOS, Windows |
 
 ### Build and test
 
@@ -162,14 +163,14 @@ Set `PUMEX_HOME` to an isolated directory. This changes both the pipe name and t
 ```sh
 # Linux / macOS
 export PUMEX_HOME="$HOME/.pumex-dev"
-dotnet run --project Pumex.Daemon       # dev daemon — own pipe, own index.db
+dotnet run --project src/Pumex.Daemon       # dev daemon — own pipe, own index.db
 pumex search foo                        # CLI picks up PUMEX_HOME automatically
 ```
 
 ```powershell
 # Windows
 $env:PUMEX_HOME = "$HOME\.pumex-dev"
-dotnet run --project Pumex.Daemon
+dotnet run --project src/Pumex.Daemon
 pumex search foo
 ```
 
