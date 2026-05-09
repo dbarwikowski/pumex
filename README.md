@@ -30,7 +30,8 @@ pumex daemon install      # registers the daemon as a systemd user service / lau
 
 ```powershell
 iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.ps1 | iex
-$env:PATH = "$HOME\.pumex\bin;$env:PATH"
+[Environment]::SetEnvironmentVariable('PATH', "$HOME\.pumex\bin;$([Environment]::GetEnvironmentVariable('PATH','User'))", 'User')
+$env:PATH = "$HOME\.pumex\bin;$env:PATH"   # also add to the current session
 # In an elevated shell:
 pumex daemon install      # registers the daemon as a Windows service
 ```

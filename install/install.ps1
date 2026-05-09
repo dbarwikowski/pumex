@@ -1,7 +1,7 @@
 # Pumex installer — downloads the latest release for this platform and drops
 # pumex.exe + pumex-daemon.exe into $HOME\.pumex\bin\.
 #
-# Usage:    iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/install.ps1 | iex
+# Usage:    iwr https://raw.githubusercontent.com/dbarwikowski/pumex/main/install/install.ps1 | iex
 # Pinning:  $env:PUMEX_VERSION = 'v0.2.0'; iwr ... | iex
 
 $ErrorActionPreference = 'Stop'
