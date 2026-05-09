@@ -106,6 +106,7 @@ public class IndexDb : IDisposable
 
     public async Task<long> AddVaultAsync(string name, string path)
     {
+        path = Path.TrimEndingDirectorySeparator(path);
         using var _ = await AcquireAsync();
         using var cmd = Command("""
             INSERT INTO vaults (name, path) VALUES (@name, @path)
@@ -129,8 +130,10 @@ public class IndexDb : IDisposable
 
     public async Task<VaultRecord?> GetVaultByPathAsync(string path)
     {
+        path = Path.TrimEndingDirectorySeparator(path);
         using var _ = await AcquireAsync();
-        using var cmd = Command("SELECT id, name, path FROM vaults WHERE path = @path", ("@path", path));
+        // rtrim handles rows stored before the trailing-separator normalisation was added
+        using var cmd = Command("SELECT id, name, path FROM vaults WHERE rtrim(path, '/\\') = @path", ("@path", path));
         using var reader = await cmd.ExecuteReaderAsync();
         if (!await reader.ReadAsync()) return null;
         return new VaultRecord(reader.GetInt64(0), reader.GetString(1), reader.GetString(2));
