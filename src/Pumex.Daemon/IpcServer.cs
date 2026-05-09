@@ -1,4 +1,6 @@
 using System.IO.Pipes;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using Pumex.Contracts;
@@ -32,12 +34,7 @@ public class IpcServer : BackgroundService
         {
             try
             {
-                var pipe = new NamedPipeServerStream(
-                    _pipeName,
-                    PipeDirection.InOut,
-                    NamedPipeServerStream.MaxAllowedServerInstances,
-                    PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous);
+                var pipe = CreatePipe(_pipeName);
 
                 await pipe.WaitForConnectionAsync(ct);
 
@@ -120,6 +117,36 @@ public class IpcServer : BackgroundService
         var buf = new byte[length];
         await pipe.ReadExactlyAsync(buf, ct);
         return Encoding.UTF8.GetString(buf);
+    }
+
+    // On Windows the pipe must grant AuthenticatedUsers read/write so a non-elevated
+    // CLI can connect to a daemon running as a Windows Service (Session 0).
+    private static NamedPipeServerStream CreatePipe(string pipeName)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var security = new PipeSecurity();
+            security.AddAccessRule(new PipeAccessRule(
+                new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null),
+                PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance,
+                AccessControlType.Allow));
+            return NamedPipeServerStreamAcl.Create(
+                pipeName,
+                PipeDirection.InOut,
+                NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous,
+                inBufferSize: 0,
+                outBufferSize: 0,
+                security);
+        }
+
+        return new NamedPipeServerStream(
+            pipeName,
+            PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous);
     }
 
     private static async Task WriteMessageAsync(PipeStream pipe, string message, CancellationToken ct)
