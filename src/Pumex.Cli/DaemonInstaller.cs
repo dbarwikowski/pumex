@@ -7,6 +7,7 @@ public class DaemonInstaller
 {
     private const string ServiceName = "pumex";
     private const string MacLabel = "com.pumex.daemon";
+    private const string WindowsTaskName = "Pumex Daemon";
 
     private readonly string _daemonPath;
 
@@ -90,62 +91,32 @@ public class DaemonInstaller
         return rc;
     }
 
-    // -------------------- Windows (sc) --------------------
+    // -------------------- Windows (schtasks) --------------------
 
     private async Task<int> InstallWindowsAsync()
     {
-        if (!IsAdministrator())
-        {
-            AnsiConsole.MarkupLine("[red]error:[/] Windows service install requires administrator privileges. Re-run from an elevated shell.");
-            return 1;
-        }
+        if (await Run("schtasks", "/create", "/tn", WindowsTaskName, "/tr", $"\"{_daemonPath}\"", "/sc", "ONLOGON", "/f") != 0) return 1;
+        if (await Run("schtasks", "/run", "/tn", WindowsTaskName) != 0)
+            AnsiConsole.MarkupLine("[yellow]warning:[/] task created but failed to start. Try [bold]pumex daemon restart[/].");
 
-        if (await Run("sc", "create", ServiceName, $"binPath=\"{_daemonPath}\"", "start=auto", "DisplayName=Pumex Daemon") != 0) return 1;
-        if (await Run("sc", "start", ServiceName) != 0)
-        {
-            AnsiConsole.MarkupLine("[yellow]warning:[/] service created but failed to start. Try [bold]pumex daemon restart[/].");
-        }
-
-        AnsiConsole.MarkupLine($"[green]installed[/] Windows service [bold]{ServiceName}[/]");
+        AnsiConsole.MarkupLine($"[green]installed[/] scheduled task [bold]{WindowsTaskName}[/]");
         return 0;
     }
 
     private async Task<int> UninstallWindowsAsync()
     {
-        if (!IsAdministrator())
-        {
-            AnsiConsole.MarkupLine("[red]error:[/] Windows service uninstall requires administrator privileges.");
-            return 1;
-        }
-        await Run("sc", "stop", ServiceName);
-        await Run("sc", "delete", ServiceName);
-        AnsiConsole.MarkupLine("[green]uninstalled[/] Windows service");
+        await Run("schtasks", "/end", "/tn", WindowsTaskName);
+        await Run("schtasks", "/delete", "/tn", WindowsTaskName, "/f");
+        AnsiConsole.MarkupLine("[green]uninstalled[/] scheduled task");
         return 0;
     }
 
     private async Task<int> RestartWindowsAsync()
     {
-        if (!IsAdministrator())
-        {
-            AnsiConsole.MarkupLine("[red]error:[/] Windows service restart requires administrator privileges.");
-            return 1;
-        }
-        await Run("sc", "stop", ServiceName);
-        var rc = await Run("sc", "start", ServiceName);
+        await Run("schtasks", "/end", "/tn", WindowsTaskName);
+        var rc = await Run("schtasks", "/run", "/tn", WindowsTaskName);
         if (rc == 0) AnsiConsole.MarkupLine("[green]restarted[/]");
         return rc;
-    }
-
-    private static bool IsAdministrator()
-    {
-        if (!OperatingSystem.IsWindows()) return true;
-        try
-        {
-            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
-            var principal = new System.Security.Principal.WindowsPrincipal(identity);
-            return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
-        }
-        catch { return false; }
     }
 
     // -------------------- macOS (launchd) --------------------
