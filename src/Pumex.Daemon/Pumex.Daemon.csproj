@@ -7,6 +7,9 @@
     <UserSecretsId>dotnet-Pumex.Daemon-acffe07c-43d8-4cf5-ac9f-fc0f313834c3</UserSecretsId>
     <!-- pumex-daemon is the user-visible name; matches DaemonInstaller's expectation. -->
     <AssemblyName>pumex-daemon</AssemblyName>
+    <!-- Suppress console window when launched via scheduled task / double-click.
+         On Linux/macOS this is equivalent to Exe; dotnet run is unaffected. -->
+    <OutputType>WinExe</OutputType>
     <!-- Embed native libs (SQLite) into the single-file bundle so the published
          output is genuinely one binary. -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
