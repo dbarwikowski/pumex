@@ -64,6 +64,13 @@ jobs:
             --self-contained -p:PublishSingleFile=true \
             -o publish/${{ matrix.rid }}
 
+      - name: Publish MCP
+        shell: bash
+        run: |
+          dotnet publish src/Pumex.Mcp -c Release -r ${{ matrix.rid }} \
+            --self-contained -p:PublishSingleFile=true \
+            -o publish/${{ matrix.rid }}
+
       # Asset names omit the tag so the install scripts can resolve them via
       # the GitHub /releases/latest/download/<name> shortcut.
       - name: Stage binaries (POSIX)
@@ -73,7 +80,8 @@ jobs:
           mkdir -p stage
           cp publish/${{ matrix.rid }}/pumex stage/
           cp publish/${{ matrix.rid }}/pumex-daemon stage/
-          chmod +x stage/pumex stage/pumex-daemon
+          cp publish/${{ matrix.rid }}/pumex-mcp stage/
+          chmod +x stage/pumex stage/pumex-daemon stage/pumex-mcp
           tar -czf pumex-${{ matrix.rid }}.tar.gz -C stage .
 
       - name: Stage binaries (Windows)
@@ -83,6 +91,7 @@ jobs:
           New-Item -ItemType Directory -Force stage | Out-Null
           Copy-Item publish/${{ matrix.rid }}/pumex.exe stage/
           Copy-Item publish/${{ matrix.rid }}/pumex-daemon.exe stage/
+          Copy-Item publish/${{ matrix.rid }}/pumex-mcp.exe stage/
           Compress-Archive -Path stage/* -DestinationPath "pumex-${{ matrix.rid }}.zip"
 
       - name: Upload to release

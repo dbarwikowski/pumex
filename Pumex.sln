@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.4.11605.240
@@ -18,6 +18,12 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Daemon.IntegrationTests", "src\Pumex.Daemon.IntegrationTests\Pumex.Daemon.IntegrationTests.csproj", "{B2581C5D-4620-4894-84FB-AD1F7BB7E20A}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Benchmarks", "src\Pumex.Benchmarks\Pumex.Benchmarks.csproj", "{D243129E-541F-4449-88BD-3B8B19F6FDCF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.IpcClient", "src\Pumex.IpcClient\Pumex.IpcClient.csproj", "{9B03DD63-CEDB-409C-A747-D1226E9009BE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Mcp", "src\Pumex.Mcp\Pumex.Mcp.csproj", "{1FB52C88-94FE-4816-B16C-A6B38832BB8F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -125,9 +131,36 @@ Global
 		{D243129E-541F-4449-88BD-3B8B19F6FDCF}.Release|x64.Build.0 = Release|Any CPU
 		{D243129E-541F-4449-88BD-3B8B19F6FDCF}.Release|x86.ActiveCfg = Release|Any CPU
 		{D243129E-541F-4449-88BD-3B8B19F6FDCF}.Release|x86.Build.0 = Release|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Debug|x64.Build.0 = Debug|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Debug|x86.Build.0 = Debug|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Release|x64.ActiveCfg = Release|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Release|x64.Build.0 = Release|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Release|x86.ActiveCfg = Release|Any CPU
+		{9B03DD63-CEDB-409C-A747-D1226E9009BE}.Release|x86.Build.0 = Release|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Debug|x64.Build.0 = Debug|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Debug|x86.Build.0 = Debug|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Release|x64.ActiveCfg = Release|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Release|x64.Build.0 = Release|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Release|x86.ActiveCfg = Release|Any CPU
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{1FB52C88-94FE-4816-B16C-A6B38832BB8F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EDAB22F8-FC1E-4783-8F9F-185A84D67995}

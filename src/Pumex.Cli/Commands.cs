@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Pumex.Contracts;
+using Pumex.Ipc;
 using Spectre.Console;
 
 namespace Pumex.Cli;

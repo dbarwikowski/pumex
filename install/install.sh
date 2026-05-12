@@ -66,7 +66,7 @@ elif [ "$os" = "osx" ]; then
 fi
 
 tar -xzf "$tmp/$asset" -C "$BIN_DIR"
-chmod +x "$BIN_DIR/pumex" "$BIN_DIR/pumex-daemon"
+chmod +x "$BIN_DIR/pumex" "$BIN_DIR/pumex-daemon" "$BIN_DIR/pumex-mcp"
 echo "Installed to $BIN_DIR"
 
 # ---- Add to PATH (permanent, deduplicated) ----

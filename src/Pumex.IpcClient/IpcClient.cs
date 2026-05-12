@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Pumex.Contracts;
 
-namespace Pumex.Cli;
+namespace Pumex.Ipc;
 
 public class IpcClient
 {
