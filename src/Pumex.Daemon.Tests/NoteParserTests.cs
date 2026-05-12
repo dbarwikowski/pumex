@@ -31,14 +31,16 @@ public class NoteParserTests : IDisposable
     }
 
     [Fact]
-    public void Malformed_yaml_swallows_the_error_and_yields_empty_properties()
+    public void Malformed_yaml_does_not_crash_the_daemon()
     {
-        // Unbalanced YAML must not crash the daemon.
+        // The custom parser splits on the first colon, so "this: is: not: valid" yields
+        // key="this", value="is: not: valid". The orphan "  - mixed" line (no colon) is
+        // silently ignored. Body content must survive intact regardless.
         var path = _vault.WriteNote("bad.md", "---\nthis: is: not: valid\n  - mixed\n---\n\nstill body\n");
 
         var doc = _parser.Parse(path);
 
-        Assert.Empty(doc.Frontmatter);
+        Assert.Equal("is: not: valid", doc.Frontmatter["this"]);
         Assert.Equal("still body\n", doc.Content);
     }
 

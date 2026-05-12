@@ -1,0 +1,36 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <!--
+      Embeds native SQLite (libsqlite3) into the single-file bundle so the published binary
+      is self-contained. Under Native AOT this is redundant — AOT statically links the native
+      lib — but it's harmless to leave in place.
+    -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>true</PublishTrimmed>
+
+    <!--
+      Native AOT: YamlDotNet replaced with custom parser. Remaining blocker to verify:
+      Microsoft.Extensions.Hosting.Systemd / WindowsServices reflection patterns.
+      Test: dotnet publish -r linux-x64 -c Release -p:PublishAot=true
+      When clean, uncomment:
+    -->
+    <!-- <PublishAot>true</PublishAot> -->
+    <!-- <OptimizationPreference>Size</OptimizationPreference> -->
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+</Project>

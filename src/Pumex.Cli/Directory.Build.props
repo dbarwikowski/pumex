@@ -1,0 +1,43 @@
+<Project>
+  <!-- Chain up to repo root so baseline settings (Nullable etc.) still apply. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!--
+    Publish optimizations activate only when a RuntimeIdentifier is supplied (-r win-x64 etc.).
+    Without an RID: `dotnet build`, `dotnet run`, and test runs are completely unaffected.
+    With an RID:    `dotnet publish -r <rid> -c Release` produces a trimmed self-contained binary.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+
+    <!--
+      Native AOT goal for CLI. Blockers as of May 2026:
+        - Spectre.Console 0.51.x: AOT support is improving but not officially complete.
+        - Markdig 1.1.x: no published AOT compatibility statement yet.
+      To test AOT readiness: dotnet publish -r win-x64 -c Release -p:PublishAot=true
+      Uncomment both lines below once a clean publish is confirmed:
+    -->
+    <!-- <PublishAot>true</PublishAot> -->
+    <!-- <OptimizationPreference>Size</OptimizationPreference> -->
+  </PropertyGroup>
+
+  <!--
+    Run trim/single-file/AOT analysis at build time so issues surface during development
+    rather than at publish. These analyzers emit warnings, not errors, so builds stay green
+    during the migration to AOT-safe patterns.
+  -->
+  <PropertyGroup>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+  </PropertyGroup>
+
+  <!-- Strip all debug info and enable optimizer in Release builds. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+</Project>

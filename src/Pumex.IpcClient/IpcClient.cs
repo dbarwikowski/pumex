@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
@@ -7,11 +8,12 @@ namespace Pumex.Ipc;
 
 public class IpcClient
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
-
+    // All T types passed to SendAsync<T> are registered in PumexJsonContext, so
+    // Deserialize<IpcResponse<T>> resolves through the source-gen type map at runtime.
+    [UnconditionalSuppressMessage("Trimming", "IL2026",
+        Justification = "All T types are registered in PumexJsonContext.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050",
+        Justification = "All T types are registered in PumexJsonContext.")]
     public async Task<IpcResponse<T>> SendAsync<T>(string command, Dictionary<string, string>? args = null, int connectTimeoutMs = 2000, CancellationToken ct = default)
     {
         await using var pipe = new NamedPipeClientStream(
@@ -22,14 +24,14 @@ public class IpcClient
 
         await pipe.ConnectAsync(connectTimeoutMs, ct);
 
-        var request = new IpcRequest(command, args ?? new Dictionary<string, string>());
-        var json = JsonSerializer.Serialize(request, JsonOptions);
+        var request = new IpcRequest(command, args ?? []);
+        var json = JsonSerializer.Serialize(request, PumexJsonContext.Default.IpcRequest);
         await WriteMessageAsync(pipe, json, ct);
 
         var responseJson = await ReadMessageAsync(pipe, ct)
             ?? throw new IOException("Daemon closed the connection without a response");
 
-        return JsonSerializer.Deserialize<IpcResponse<T>>(responseJson, JsonOptions)
+        return JsonSerializer.Deserialize<IpcResponse<T>>(responseJson, PumexJsonContext.Default.Options)
             ?? new IpcResponse<T>(false, default, "Empty response");
     }
 

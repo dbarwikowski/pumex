@@ -1,6 +1,5 @@
+using System.Text;
 using Pumex.Contracts;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
 
 namespace Pumex.Daemon.Ipc;
 
@@ -44,9 +43,9 @@ public class PropertyGetHandler : ICommandHandler
 }
 
 /// <summary>
-/// Rewrites the note's YAML frontmatter to set/update <c>key</c>. Splices the
-/// block via YamlDotNet round-trip, so cosmetic formatting (key order, quoting
-/// style, comments) may not survive — documented v0.1 trade-off.
+/// Rewrites the note's YAML frontmatter to set/update <c>key</c>. Uses a custom
+/// round-trip (parse → mutate → serialize) so complex YAML (anchors, multi-line
+/// scalars) is silently flattened — documented v0.1 trade-off.
 /// </summary>
 public class PropertySetHandler : ICommandHandler
 {
@@ -95,27 +94,43 @@ public class PropertySetHandler : ICommandHandler
         var yaml = raw[3..end].Trim();
         var body = raw[(end + 4)..].TrimStart('\n');
 
-        if (string.IsNullOrWhiteSpace(yaml))
-            return (new Dictionary<string, object>(), body);
-
-        var deserializer = new DeserializerBuilder()
-            .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .IgnoreUnmatchedProperties()
-            .Build();
-
-        // Bubble parse errors up — silently overwriting malformed YAML would lose user data.
-        var parsed = deserializer.Deserialize<Dictionary<string, object>>(yaml)
-            ?? new Dictionary<string, object>();
-        return (parsed, body);
+        return (NoteParser.ParseYaml(yaml), body);
     }
 
     private static string SerializeWithFrontmatter(Dictionary<string, object> frontmatter, string body)
     {
-        var serializer = new SerializerBuilder()
-            .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .Build();
-        var yaml = serializer.Serialize(frontmatter).TrimEnd('\n');
-        var bodyPart = string.IsNullOrEmpty(body) ? "" : "\n" + body;
-        return $"---\n{yaml}\n---\n{bodyPart}";
+        var sb = new StringBuilder();
+        sb.AppendLine("---");
+        foreach (var (k, v) in frontmatter)
+        {
+            switch (v)
+            {
+                case List<object> list:
+                    sb.AppendLine($"{k}:");
+                    foreach (var item in list)
+                        sb.AppendLine($"  - {QuoteScalar(item?.ToString() ?? "")}");
+                    break;
+                default:
+                    sb.AppendLine($"{k}: {QuoteScalar(v?.ToString() ?? "")}");
+                    break;
+            }
+        }
+        sb.AppendLine("---");
+        if (!string.IsNullOrEmpty(body))
+            sb.Append(body);
+        return sb.ToString();
+    }
+
+    // Quote a scalar value if it could be misinterpreted by a YAML parser.
+    private static string QuoteScalar(string value)
+    {
+        if (value.Length == 0) return "\"\"";
+        if (value.Contains(':') || value.Contains('#') || value.Contains('\\') ||
+            value.Contains('"') || value[0] == ' ' || value[^1] == ' ' ||
+            value is "true" or "false" or "null" or "yes" or "no" or "on" or "off")
+        {
+            return '"' + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + '"';
+        }
+        return value;
     }
 }

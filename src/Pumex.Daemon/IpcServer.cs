@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -13,11 +14,6 @@ public class IpcServer : BackgroundService
     private readonly Dictionary<string, ICommandHandler> _handlers;
     private readonly ILogger<IpcServer> _logger;
     private readonly string _pipeName;
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
 
     public IpcServer(IEnumerable<ICommandHandler> handlers, ILogger<IpcServer> logger, string? pipeName = null)
     {
@@ -61,7 +57,7 @@ public class IpcServer : BackgroundService
                 var raw = await ReadMessageAsync(pipe, ct);
                 if (raw is null) return;
 
-                var request = JsonSerializer.Deserialize<IpcRequest>(raw, JsonOptions);
+                var request = JsonSerializer.Deserialize(raw, PumexJsonContext.Default.IpcRequest);
                 if (request is null) return;
 
                 var response = await DispatchAsync(request, ct);
@@ -72,8 +68,7 @@ public class IpcServer : BackgroundService
                 _logger.LogWarning(ex, "Connection error");
                 try
                 {
-                    var error = JsonSerializer.Serialize(IpcResponse.Fail(ex.Message), JsonOptions);
-                    await WriteMessageAsync(pipe, error, ct);
+                    await WriteMessageAsync(pipe, SerializeResponse(IpcResponse.Fail(ex.Message)), ct);
                 }
                 catch { /* pipe may be closed */ }
             }
@@ -83,18 +78,27 @@ public class IpcServer : BackgroundService
     private async Task<string> DispatchAsync(IpcRequest request, CancellationToken ct)
     {
         if (!_handlers.TryGetValue(request.Command, out var handler))
-            return JsonSerializer.Serialize(IpcResponse.Fail($"Unknown command: {request.Command}"), JsonOptions);
+            return SerializeResponse(IpcResponse.Fail($"Unknown command: {request.Command}"));
 
         try
         {
             var result = await handler.HandleAsync(request, ct);
-            return JsonSerializer.Serialize(IpcResponse.Ok(result), JsonOptions);
+            return SerializeResponse(IpcResponse.Ok(result));
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(IpcResponse.Fail(ex.Message), JsonOptions);
+            return SerializeResponse(IpcResponse.Fail(ex.Message));
         }
     }
+
+    // Handler return types are preserved by DI registrations; IpcResponse<object?> Data is
+    // serialized via the runtime type, which matches the type the client deserializes into.
+    [UnconditionalSuppressMessage("Trimming", "IL2026",
+        Justification = "IpcResponse types are in PumexJsonContext; handler types are rooted by DI.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050",
+        Justification = "IpcResponse types are in PumexJsonContext; handler types are rooted by DI.")]
+    private static string SerializeResponse<T>(IpcResponse<T> response)
+        => JsonSerializer.Serialize(response, PumexJsonContext.Default.Options);
 
     // -------------------------
     // Wire format: 4-byte little-endian length + UTF-8 JSON, max 10 MB.

@@ -10,11 +10,6 @@ namespace Pumex.Daemon.Ipc;
 /// </summary>
 internal static class Daily
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
-
     public static async Task<VaultConfig> LoadConfigAsync(VaultRecord vault, CancellationToken ct)
     {
         var configPath = Path.Combine(vault.Path, PumexPaths.VaultMarkerDir, PumexPaths.VaultConfigFile);
@@ -24,7 +19,7 @@ internal static class Daily
         try
         {
             var json = await File.ReadAllTextAsync(configPath, ct);
-            return JsonSerializer.Deserialize<VaultConfig>(json, JsonOptions)
+            return JsonSerializer.Deserialize(json, PumexJsonContext.Default.VaultConfig)
                 ?? new VaultConfig(vault.Name, DateTimeOffset.UtcNow, VaultConfig.CurrentVersion);
         }
         catch

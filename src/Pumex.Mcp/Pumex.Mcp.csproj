@@ -5,9 +5,6 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>Pumex.Mcp</RootNamespace>
     <AssemblyName>pumex-mcp</AssemblyName>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>

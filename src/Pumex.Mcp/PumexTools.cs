@@ -10,12 +10,6 @@ namespace Pumex.Mcp;
 [McpServerToolType]
 public sealed class PumexTools
 {
-    private static readonly JsonSerializerOptions JsonOut = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-    };
-
     [McpServerTool, Description("Ping the Pumex daemon. Returns 'pong' if the daemon is running, or an error message if it is not reachable.")]
     public static async Task<string> Ping(CancellationToken ct = default)
     {
@@ -88,7 +82,7 @@ public sealed class PumexTools
             var resp = await client.SendAsync<List<TagCount>>("tags", args, ct: ct);
             if (!resp.Success) return $"error: {resp.Error}";
 
-            return JsonSerializer.Serialize(resp.Data ?? [], JsonOut);
+            return JsonSerializer.Serialize(resp.Data ?? [], PumexMcpOutputContext.Default.ListTagCount);
         }
         catch (Exception ex)
         {
@@ -112,7 +106,7 @@ public sealed class PumexTools
             var resp = await client.SendAsync<List<string>>("backlinks", args, ct: ct);
             if (!resp.Success) return $"error: {resp.Error}";
 
-            return JsonSerializer.Serialize(resp.Data ?? [], JsonOut);
+            return JsonSerializer.Serialize(resp.Data ?? [], PumexMcpOutputContext.Default.ListString);
         }
         catch (Exception ex)
         {
@@ -172,7 +166,7 @@ public sealed class PumexTools
             var resp = await client.SendAsync<List<NoteSummary>>("note:list", args, ct: ct);
             if (!resp.Success) return $"error: {resp.Error}";
 
-            return JsonSerializer.Serialize(resp.Data ?? [], JsonOut);
+            return JsonSerializer.Serialize(resp.Data ?? [], PumexMcpOutputContext.Default.ListNoteSummary);
         }
         catch (Exception ex)
         {
@@ -189,7 +183,7 @@ public sealed class PumexTools
             var resp = await client.SendAsync<List<VaultRecord>>("vaults", ct: ct);
             if (!resp.Success) return $"error: {resp.Error}";
 
-            return JsonSerializer.Serialize(resp.Data ?? [], JsonOut);
+            return JsonSerializer.Serialize(resp.Data ?? [], PumexMcpOutputContext.Default.ListVaultRecord);
         }
         catch (Exception ex)
         {
@@ -213,7 +207,7 @@ public sealed class PumexTools
             var resp = await client.SendAsync<List<PropertyEntry>>("property:list", args, ct: ct);
             if (!resp.Success) return $"error: {resp.Error}";
 
-            return JsonSerializer.Serialize(resp.Data ?? [], JsonOut);
+            return JsonSerializer.Serialize(resp.Data ?? [], PumexMcpOutputContext.Default.ListPropertyEntry);
         }
         catch (Exception ex)
         {

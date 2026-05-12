@@ -7,12 +7,6 @@ namespace Pumex.Cli;
 
 public static class Commands
 {
-    private static readonly JsonSerializerOptions VaultConfigJson = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-    };
-
     public static async Task<int> NewVaultAsync(IpcClient client, string[] args)
     {
         if (args.Length == 0) return Usage("pumex new <name> [path]");
@@ -32,7 +26,7 @@ public static class Commands
         {
             Directory.CreateDirectory(markerDir);
             var config = new VaultConfig(name, DateTimeOffset.UtcNow, VaultConfig.CurrentVersion);
-            File.WriteAllText(configPath, JsonSerializer.Serialize(config, VaultConfigJson));
+            File.WriteAllText(configPath, JsonSerializer.Serialize(config, PumexJsonContext.Default.VaultConfig));
             AnsiConsole.MarkupLine($"[green]initialized[/] vault [bold]{name.EscapeMarkup()}[/] at {vaultPath.EscapeMarkup()}");
         }
 

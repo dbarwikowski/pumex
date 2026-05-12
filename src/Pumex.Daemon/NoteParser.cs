@@ -1,20 +1,9 @@
 using System.Text.RegularExpressions;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
 
 namespace Pumex.Daemon;
 
 public partial class NoteParser
 {
-    // Build the YAML deserializer once. DeserializerBuilder.Build() is heavy —
-    // benchmarks at 10k notes traced ~70 % of cold-scan allocations to per-call
-    // construction. The IDeserializer is documented thread-safe for read-only
-    // Deserialize calls.
-    private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder()
-        .WithNamingConvention(CamelCaseNamingConvention.Instance)
-        .IgnoreUnmatchedProperties()
-        .Build();
-
     public NoteDocument Parse(string filePath)
     {
         var raw = File.ReadAllText(filePath);
@@ -71,22 +60,93 @@ public partial class NoteParser
         return (ParseYaml(yaml), content);
     }
 
-    private static Dictionary<string, object> ParseYaml(string yaml)
+    // Handles key: value, key: [a, b, c], and block list form:
+    //   key:
+    //     - a
+    //     - b
+    // Quoted scalars (single or double) are unquoted. Everything else is a string.
+    // Complex YAML (anchors, multi-line scalars, nested maps) is silently ignored.
+    internal static Dictionary<string, object> ParseYaml(string yaml)
     {
         if (string.IsNullOrWhiteSpace(yaml))
-            return new Dictionary<string, object>();
+            return [];
 
-        try
+        var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        string? currentKey = null;
+        List<object>? currentList = null;
+
+        foreach (var rawLine in yaml.Split('\n'))
         {
-            return YamlDeserializer.Deserialize<Dictionary<string, object>>(yaml)
-                ?? new Dictionary<string, object>();
+            var line = rawLine.TrimEnd();
+
+            // Block list item under currentKey
+            if (currentKey is not null && currentList is not null)
+            {
+                var trimmed = line.TrimStart();
+                if (trimmed.StartsWith("- ", StringComparison.Ordinal))
+                {
+                    currentList.Add(UnquoteScalar(trimmed[2..].Trim()));
+                    continue;
+                }
+            }
+
+            var colonIdx = line.IndexOf(':');
+            if (colonIdx <= 0) { currentKey = null; currentList = null; continue; }
+
+            var key = line[..colonIdx].Trim();
+            if (string.IsNullOrEmpty(key) || key.Contains(' '))
+            { currentKey = null; currentList = null; continue; }
+
+            var rest = line[(colonIdx + 1)..].Trim();
+
+            if (rest.StartsWith('['))
+            {
+                var list = ParseInlineList(rest);
+                result[key] = list;
+                currentKey = key;
+                currentList = list;
+            }
+            else if (rest.Length == 0)
+            {
+                var list = new List<object>();
+                result[key] = list;
+                currentKey = key;
+                currentList = list;
+            }
+            else
+            {
+                result[key] = UnquoteScalar(rest);
+                currentKey = key;
+                currentList = null;
+            }
         }
-        catch
-        {
-            // Malformed YAML mustn't crash the daemon.
-            return new Dictionary<string, object>();
-        }
+
+        return result;
     }
+
+    private static List<object> ParseInlineList(string s)
+    {
+        var inner = s.TrimStart('[');
+        var end = inner.LastIndexOf(']');
+        if (end >= 0) inner = inner[..end];
+        var result = new List<object>();
+        foreach (var item in inner.Split(','))
+        {
+            var value = UnquoteScalar(item.Trim());
+            if (value.Length > 0) result.Add(value);
+        }
+        return result;
+    }
+
+    internal static string UnquoteScalar(string value)
+    {
+        if (value.Length >= 2 &&
+            ((value[0] == '"' && value[^1] == '"') ||
+             (value[0] == '\'' && value[^1] == '\'')))
+            return value[1..^1];
+        return value;
+    }
+
     private List<string> ExtractTags(Dictionary<string, object> frontmatter, string content)
     {
         var tags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -129,7 +189,7 @@ public partial class NoteParser
     }
 
     // #tag, #tag/subtag - nie matchuj URL (#anchor) ani nagłówków (# Heading)
-    [GeneratedRegex(@"(?<!\S)#([A-Za-z\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F/_-]*)")]
+    [GeneratedRegex(@"(?<!\S)#([A-Za-zÀ-ɏ][A-Za-z0-9À-ɏ/_-]*)")]
     private static partial Regex InlineTagRegex();
 
     [GeneratedRegex(@"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")]

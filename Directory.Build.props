@@ -1,0 +1,15 @@
+<Project>
+  <!--
+    Applies to every project in the repo (all 10). Keep lean — only settings that are
+    universally correct. Publish/AOT/trim settings live in per-executable subdirectories
+    so shared libs (Contracts, IpcClient) are never polluted with those flags.
+  -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Polish characters in tags and note names require full ICU data. Never flip to true. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- Pin to "latest" so C# 13 features are available without per-project declarations. -->
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+</Project>
