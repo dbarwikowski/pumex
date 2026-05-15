@@ -14,6 +14,8 @@ namespace Pumex.Contracts;
 [JsonSerializable(typeof(IpcResponse<List<NoteSummary>>))]
 [JsonSerializable(typeof(IpcResponse<List<PropertyEntry>>))]
 [JsonSerializable(typeof(IpcResponse<NotePathResult>))]
+[JsonSerializable(typeof(IpcResponse<PluginInfo>))]
+[JsonSerializable(typeof(IpcResponse<List<PluginInfo>>))]
 [JsonSerializable(typeof(VaultConfig))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 public partial class PumexJsonContext : JsonSerializerContext { }

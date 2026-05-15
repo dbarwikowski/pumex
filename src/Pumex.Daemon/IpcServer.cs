@@ -4,20 +4,29 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Pumex.Contracts;
 using Pumex.Daemon.Ipc;
+using Pumex.Daemon.Plugins;
+using Pumex.Plugin.Sdk;
 
 namespace Pumex.Daemon;
 
 public class IpcServer : BackgroundService
 {
     private readonly Dictionary<string, ICommandHandler> _handlers;
+    private readonly PluginRegistry? _plugins;
     private readonly ILogger<IpcServer> _logger;
     private readonly string _pipeName;
 
-    public IpcServer(IEnumerable<ICommandHandler> handlers, ILogger<IpcServer> logger, string? pipeName = null)
+    public IpcServer(
+        IEnumerable<ICommandHandler> handlers,
+        ILogger<IpcServer> logger,
+        string? pipeName = null,
+        PluginRegistry? plugins = null)
     {
         _handlers = handlers.ToDictionary(h => h.Command, StringComparer.OrdinalIgnoreCase);
+        _plugins = plugins;
         _logger = logger;
         _pipeName = pipeName ?? PumexPaths.PipeName;
     }
@@ -77,13 +86,80 @@ public class IpcServer : BackgroundService
 
     private async Task<string> DispatchAsync(IpcRequest request, CancellationToken ct)
     {
-        if (!_handlers.TryGetValue(request.Command, out var handler))
-            return SerializeResponse(IpcResponse.Fail($"Unknown command: {request.Command}"));
+        if (_handlers.TryGetValue(request.Command, out var handler))
+        {
+            try
+            {
+                var result = await handler.HandleAsync(request, ct);
+                return SerializeResponse(IpcResponse.Ok(result));
+            }
+            catch (Exception ex)
+            {
+                return SerializeResponse(IpcResponse.Fail(ex.Message));
+            }
+        }
+
+        if (_plugins is not null && _plugins.TryGet(request.Command, out var pluginHandler))
+            return await RunPluginAsync(pluginHandler, request, ct);
+
+        if (_plugins is not null && _plugins.TryGetOutOfProcess(request.Command, out var outProc))
+            return await ProxyAsync(outProc, request, ct);
+
+        return SerializeResponse(IpcResponse.Fail($"Unknown command: {request.Command}"));
+    }
+
+    // Daemon → plugin proxy. The daemon acts as a client to the plugin's pipe.
+    // Per-request connection is fine for v1; pool later if the handshake cost
+    // shows up in proxy-latency benchmarks. Plugin owns its response shape —
+    // we pass the raw JSON through verbatim so the daemon's AOT type graph
+    // doesn't need to know about every plugin's response DTO.
+    private async Task<string> ProxyAsync(OutOfProcessEntry plugin, IpcRequest request, CancellationToken ct)
+    {
+        await using var pipe = new NamedPipeClientStream(
+            ".",
+            plugin.PipeName,
+            PipeDirection.InOut,
+            PipeOptions.Asynchronous);
 
         try
         {
-            var result = await handler.HandleAsync(request, ct);
-            return SerializeResponse(IpcResponse.Ok(result));
+            await pipe.ConnectAsync(2_000, ct);
+        }
+        catch (TimeoutException)
+        {
+            _logger.LogWarning(
+                "Plugin '{Name}' did not respond on pipe '{Pipe}' — unregistering.",
+                plugin.Name, plugin.PipeName);
+            _plugins!.MarkDead(plugin.Name);
+            return SerializeResponse(IpcResponse.Fail(
+                $"Plugin '{plugin.Name}' did not respond on pipe '{plugin.PipeName}'."));
+        }
+
+        var requestJson = JsonSerializer.Serialize(request, PumexJsonContext.Default.IpcRequest);
+        await WriteMessageAsync(pipe, requestJson, ct);
+
+        var responseJson = await ReadMessageAsync(pipe, ct);
+        // Pass-through: never re-parse, never re-serialise. Plugins can return
+        // any JSON shape without touching PumexJsonContext.
+        return responseJson ?? SerializeResponse(IpcResponse.Fail(
+            $"Plugin '{plugin.Name}' closed the connection without response."));
+    }
+
+    private static async Task<string> RunPluginAsync(IPluginCommandHandler h, IpcRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var data = await h.HandleAsync(req, ct);
+            // Hand-roll the envelope: plugins return arbitrary JsonNode shapes,
+            // and we don't want every plugin's response type registered in
+            // PumexJsonContext. Splice the node in verbatim.
+            var envelope = new JsonObject
+            {
+                ["success"] = true,
+                ["data"] = data,
+                ["error"] = null,
+            };
+            return envelope.ToJsonString();
         }
         catch (Exception ex)
         {

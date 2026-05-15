@@ -535,6 +535,60 @@ public static class Commands
         return 0;
     }
 
+    public static async Task<int> PluginAsync(IpcClient client, string[] args)
+    {
+        if (args.Length == 0) return Usage("pumex plugin <list|load> ...");
+
+        return args[0] switch
+        {
+            "list" => await PluginListAsync(client),
+            "load" => await PluginLoadAsync(client, args[1..]),
+            _ => Usage("pumex plugin <list|load> ..."),
+        };
+    }
+
+    private static async Task<int> PluginListAsync(IpcClient client)
+    {
+        var resp = await client.SendAsync<List<PluginInfo>>("plugin:list");
+        if (!resp.Success) return Error(resp.Error);
+
+        var plugins = resp.Data ?? [];
+        if (plugins.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[dim]no plugins loaded.[/]");
+            return 0;
+        }
+
+        var table = new Table().Border(TableBorder.Minimal);
+        table.AddColumn("Name");
+        table.AddColumn("Kind");
+        table.AddColumn("Version");
+        table.AddColumn("Commands");
+        foreach (var p in plugins)
+        {
+            table.AddRow(
+                p.Name.EscapeMarkup(),
+                p.Kind.EscapeMarkup(),
+                (p.Version ?? "-").EscapeMarkup(),
+                string.Join(", ", p.Commands).EscapeMarkup());
+        }
+
+        AnsiConsole.Write(table);
+        return 0;
+    }
+
+    private static async Task<int> PluginLoadAsync(IpcClient client, string[] args)
+    {
+        if (args.Length < 1) return Usage("pumex plugin load <path>");
+
+        var path = Path.GetFullPath(args[0]);
+        var resp = await client.SendAsync<string>("plugin:load", new() { ["path"] = path });
+        if (!resp.Success) return Error(resp.Error);
+
+        AnsiConsole.MarkupLine($"[green]loaded[/] plugin from {path.EscapeMarkup()}");
+        return 0;
+    }
+
     public static async Task<int> DaemonAsync(IpcClient client, string[] args)
     {
         if (args.Length == 0) return Usage("pumex daemon <status|install|uninstall|restart> [--daemon-path PATH]");

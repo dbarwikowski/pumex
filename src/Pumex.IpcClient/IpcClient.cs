@@ -8,6 +8,11 @@ namespace Pumex.Ipc;
 
 public class IpcClient
 {
+    private readonly string _pipeName;
+
+    public IpcClient(string? pipeName = null)
+        => _pipeName = pipeName ?? PumexPaths.PipeName;
+
     // All T types passed to SendAsync<T> are registered in PumexJsonContext, so
     // Deserialize<IpcResponse<T>> resolves through the source-gen type map at runtime.
     [UnconditionalSuppressMessage("Trimming", "IL2026",
@@ -18,7 +23,7 @@ public class IpcClient
     {
         await using var pipe = new NamedPipeClientStream(
             ".",
-            PumexPaths.PipeName,
+            _pipeName,
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
 

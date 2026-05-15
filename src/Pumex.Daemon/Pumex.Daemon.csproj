@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Pumex.Contracts\Pumex.Contracts.csproj" />
+    <ProjectReference Include="..\Pumex.Plugin.Sdk\Pumex.Plugin.Sdk.csproj" />
   </ItemGroup>
 
   <ItemGroup>

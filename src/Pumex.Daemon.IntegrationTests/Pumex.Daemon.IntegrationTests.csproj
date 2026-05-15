@@ -18,6 +18,21 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Pumex.Daemon\Pumex.Daemon.csproj" />
+    <!-- Fixture for the 001B auto-spawn integration test. We don't reference
+         its outputs (ReferenceOutputAssembly=false) — only force-build it so
+         the post-build target below can copy its files into bin/oop-fixture/. -->
+    <ProjectReference Include="..\Pumex.Daemon.IntegrationTests.OopFixture\Pumex.Daemon.IntegrationTests.OopFixture.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
   </ItemGroup>
+
+  <Target Name="CopyOopFixtureOutputs" AfterTargets="Build">
+    <ItemGroup>
+      <_OopFixtureFiles Include="$(MSBuildThisFileDirectory)..\Pumex.Daemon.IntegrationTests.OopFixture\bin\$(Configuration)\$(TargetFramework)\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_OopFixtureFiles)"
+          DestinationFiles="@(_OopFixtureFiles->'$(OutputPath)oop-fixture\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

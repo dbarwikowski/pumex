@@ -25,6 +25,7 @@ try
         "note" => await Commands.NoteAsync(client, args[1..]),
         "property" => await Commands.PropertyAsync(client, args[1..]),
         "daily" => await Commands.DailyAsync(client, args[1..]),
+        "plugin" => await Commands.PluginAsync(client, args[1..]),
         "daemon" => await Commands.DaemonAsync(client, args[1..]),
         _ => UnknownCommand(args[0]),
     };
@@ -70,6 +71,8 @@ static void PrintUsage()
     AnsiConsole.WriteLine("  pumex property set  <path-or-name> <key> <value> [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex daily [read]                             [--date YYYY-MM-DD] [--vault NAME | --vault-path PATH]");
     AnsiConsole.WriteLine("  pumex daily append [--content TEXT | --stdin] [--inline] [--date YYYY-MM-DD] [--vault NAME | --vault-path PATH]");
+    AnsiConsole.WriteLine("  pumex plugin list");
+    AnsiConsole.WriteLine("  pumex plugin load <path>");
     AnsiConsole.WriteLine("  pumex daemon <status|install|uninstall|restart> [--daemon-path PATH]");
     AnsiConsole.WriteLine();
     AnsiConsole.WriteLine("Commands that operate on vault contents default to the vault containing the");
