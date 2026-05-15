@@ -20,8 +20,6 @@
     -->
     <!-- <PublishAot>true</PublishAot> -->
     <!-- <OptimizationPreference>Size</OptimizationPreference> -->
-	<PublishAot>true</PublishAot>
-	<OptimizationPreference>Size</OptimizationPreference>
   </PropertyGroup>
 
   <PropertyGroup>
