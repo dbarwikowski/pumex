@@ -23,8 +23,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.IpcClient", "src\Pume
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Mcp", "src\Pumex.Mcp\Pumex.Mcp.csproj", "{1FB52C88-94FE-4816-B16C-A6B38832BB8F}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Plugin.Sdk", "src\Pumex.Plugin.Sdk\Pumex.Plugin.Sdk.csproj", "{305281C1-974F-4EC7-9CFC-73FFAE484511}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pumex.Plugin.Sdk.Tests", "src\Pumex.Plugin.Sdk.Tests\Pumex.Plugin.Sdk.Tests.csproj", "{6A36A953-6100-4756-ADC6-676A0C020032}"
@@ -200,11 +198,6 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
-		{305281C1-974F-4EC7-9CFC-73FFAE484511} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
-		{6A36A953-6100-4756-ADC6-676A0C020032} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
-		{BD8F74DC-4D62-4F0B-A3B5-F229A3C9B497} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EDAB22F8-FC1E-4783-8F9F-185A84D67995}
