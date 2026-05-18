@@ -59,11 +59,11 @@ Installs and starts the daemon as a platform-appropriate background service:
 
 | Platform | Service type | Requires |
 |---|---|---|
-| Windows | Windows Service (`sc`) | Administrator |
+| Windows | Scheduled Task (`schtasks`) | Administrator |
 | Linux | systemd user service | — |
 | macOS | launchd user agent | — |
 
-**Windows** — requires an elevated shell. Writes a service entry under the name `pumex` and starts it.
+**Windows** — requires an elevated shell. Creates a scheduled task named "Pumex Daemon" with an ONLOGON trigger and runs it immediately.
 
 **Linux** — writes `~/.config/systemd/user/pumex.service` and runs `systemctl --user enable --now pumex`.
 

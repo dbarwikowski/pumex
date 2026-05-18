@@ -87,10 +87,10 @@ $env:PATH = "$BinDir;$env:PATH"
 
 # ---- Install daemon service if running as admin and not already installed ----
 if ($isAdmin -and -not $service) {
-    Write-Host "Installing pumex-daemon as a Windows service..."
+    Write-Host "Installing pumex-daemon as a scheduled task..."
     & "$BinDir\pumex.exe" daemon install
 } elseif (-not $isAdmin -and -not $service) {
     Write-Host ""
-    Write-Host "To register the daemon as a Windows service, run in an elevated shell:"
+    Write-Host "To install the daemon as a scheduled task, run in an elevated shell:"
     Write-Host "  pumex daemon install"
 }

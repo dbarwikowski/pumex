@@ -12,7 +12,7 @@ Early v0.1. The happy path works end-to-end:
 - Full-text search (FTS5), tag listing, wikilink backlinks
 - Note CRUD over a named-pipe IPC layer
 - Self-contained single-file binaries for Windows, Linux, macOS (x64 + arm64)
-- 112 unit + integration tests, BenchmarkDotNet suite for the perf-critical paths
+- Unit + integration tests, BenchmarkDotNet suite for the perf-critical paths
 
 Not yet shipped: plugin SDK, IPC auth. See `pumex --help` for the current command surface.
 
@@ -29,7 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/i
 
 ```powershell
 iwr https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/install.ps1 | iex
-# PATH is updated automatically. For the daemon service, run the above in an elevated shell.
+# PATH is updated automatically. To install the daemon as a scheduled task, run the above in an elevated shell.
 ```
 
 The installer downloads the right binary for your OS + arch from the latest GitHub Release and drops it into `~/.pumex/bin/`. Pin a version with `PUMEX_VERSION=v0.2.0` (or `$env:PUMEX_VERSION` on Windows).
