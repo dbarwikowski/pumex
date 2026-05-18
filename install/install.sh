@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
-# Pumex installer — downloads the latest release, installs to ~/.pumex/bin/,
-# adds to PATH, and registers the daemon service.
+# Pumex installer — downloads the latest release, installs pumex and
+# pumex-daemon to ~/.pumex/bin/, adds to PATH, and registers the daemon service.
 #
 # Usage:   curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/install.sh | sh
 # Pinning: PUMEX_VERSION=v0.2.0 sh install.sh
@@ -66,7 +66,7 @@ elif [ "$os" = "osx" ]; then
 fi
 
 tar -xzf "$tmp/$asset" -C "$BIN_DIR"
-chmod +x "$BIN_DIR/pumex" "$BIN_DIR/pumex-daemon" "$BIN_DIR/pumex-mcp"
+chmod +x "$BIN_DIR/pumex" "$BIN_DIR/pumex-daemon"
 echo "Installed to $BIN_DIR"
 
 # ---- Add to PATH (permanent, deduplicated) ----
