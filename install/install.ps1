@@ -1,5 +1,5 @@
 # Pumex installer — downloads the latest release for this platform, drops
-# pumex.exe, pumex-daemon.exe, and pumex-mcp.exe into $HOME\.pumex\bin\,
+# pumex.exe and pumex-daemon.exe into $HOME\.pumex\bin\,
 # and adds that to PATH.
 #
 # Usage:    iwr https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/install.ps1 | iex
