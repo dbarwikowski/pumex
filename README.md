@@ -74,7 +74,7 @@ EOF
 pumex search Welcome                       # FTS5 search over the vault
 pumex tags                                 # tag aggregation (auto-scoped to current vault)
 pumex backlinks ideas.md                   # finds welcome.md (the wikilink resolved)
-pumex note read welcome.md                 # frontmatter + body, structured
+pumex read welcome.md                      # frontmatter + body, structured
 ```
 
 Every read command auto-discovers the vault you're in by walking up from the current directory until it finds a `.pumex/` marker. Override with `--vault NAME`, `--vault-path PATH`, or `--all` for cross-vault queries.
@@ -88,17 +88,17 @@ Every read command auto-discovers the vault you're in by walking up from the cur
 | `pumex search <query> [--limit N]` | FTS5 search |
 | `pumex tags` | Tag aggregation, vault-scoped by default |
 | `pumex backlinks <path>` | Notes that link to the given note |
-| `pumex vaults` / `pumex vault add <name> <path>` | List / register vaults |
-| `pumex note read <path> [--raw]` | Read note (parsed frontmatter + body, or raw) |
-| `pumex note create <path> [--content TEXT \| --stdin]` | Write a new note |
-| `pumex note append <path> [--content TEXT \| --stdin] [--inline]` | Append to an existing note |
-| `pumex note delete <path>` | Delete a note |
-| `pumex note list` | List all notes in the vault |
-| `pumex property list <path>` | List all frontmatter properties on a note |
-| `pumex property get <path> <key>` | Read a single frontmatter property |
-| `pumex property set <path> <key> <value>` | Write a frontmatter property |
-| `pumex daily [read] [--date YYYY-MM-DD]` | Read today's (or a given) daily note |
-| `pumex daily append [--content TEXT \| --stdin] [--date YYYY-MM-DD]` | Append to a daily note |
+| `pumex vault list` / `pumex vault add <name> <path>` | List / register vaults |
+| `pumex read <path> [--raw]` | Read note (parsed frontmatter + body, or raw) |
+| `pumex create <path> [--content TEXT]` | Write a new note (pipe stdin when `--content` is omitted) |
+| `pumex append <path> [--content TEXT] [--inline]` | Append to an existing note |
+| `pumex delete <path>` | Delete a note |
+| `pumex list` | List all notes in the vault |
+| `pumex prop <path>` | List all frontmatter properties on a note |
+| `pumex prop <path> <key>` | Read a single frontmatter property |
+| `pumex prop <path> <key> <value>` | Write a frontmatter property |
+| `pumex daily [--date YYYY-MM-DD]` | Read today's (or a given) daily note |
+| `pumex daily append [--content TEXT] [--date YYYY-MM-DD]` | Append to a daily note |
 | `pumex vault remove <name>` | Unregister a vault |
 | `pumex daemon <status\|install\|uninstall\|restart>` | Manage the platform-native daemon service |
 
