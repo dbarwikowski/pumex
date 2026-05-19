@@ -1,5 +1,9 @@
 using System.Text;
 using Markdig;
+using Markdig.Extensions.Tables;
+using MdTable = Markdig.Extensions.Tables.Table;
+using MdTableCell = Markdig.Extensions.Tables.TableCell;
+using MdTableRow = Markdig.Extensions.Tables.TableRow;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Spectre.Console;
@@ -8,7 +12,9 @@ namespace Pumex.Cli;
 
 internal static class MarkdownRenderer
 {
-    private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder().Build();
+    private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
+        .UsePipeTables()
+        .Build();
 
     public static void Render(string markdown)
     {
@@ -55,6 +61,10 @@ internal static class MarkdownRenderer
 
             case QuoteBlock quote:
                 RenderQuote(quote);
+                break;
+
+            case MdTable table:
+                RenderTable(table);
                 break;
         }
     }
@@ -135,6 +145,76 @@ internal static class MarkdownRenderer
         AnsiConsole.Write(panel);
         AnsiConsole.WriteLine();
     }
+
+    private static void RenderTable(MdTable table)
+    {
+        var spectreTable = new Spectre.Console.Table { Border = TableBorder.Rounded };
+
+        MdTableRow? headerRow = null;
+        var dataRows = new List<MdTableRow>();
+        foreach (MdTableRow row in table)
+        {
+            if (row.IsHeader) headerRow = row;
+            else dataRows.Add(row);
+        }
+
+        var colCount = table.ColumnDefinitions.Count;
+        for (var i = 0; i < colCount; i++)
+        {
+            var colDef = table.ColumnDefinitions[i];
+            var headerText = headerRow is not null && i < headerRow.Count
+                ? CellToPlainText((MdTableCell)headerRow[i])
+                : string.Empty;
+            var alignment = colDef.Alignment switch
+            {
+                TableColumnAlign.Center => Justify.Center,
+                TableColumnAlign.Right => Justify.Right,
+                _ => Justify.Left,
+            };
+            spectreTable.AddColumn(new TableColumn(new Markup(headerText.EscapeMarkup())) { Alignment = alignment });
+        }
+
+        foreach (var row in dataRows)
+        {
+            var cells = new Markup[colCount];
+            for (var i = 0; i < colCount; i++)
+                cells[i] = new Markup(i < row.Count ? CellToPlainText((MdTableCell)row[i]).EscapeMarkup() : string.Empty);
+            spectreTable.AddRow(cells);
+        }
+
+        AnsiConsole.Write(spectreTable);
+        AnsiConsole.WriteLine();
+    }
+
+    internal static string CellToPlainText(MdTableCell cell)
+    {
+        var sb = new StringBuilder();
+        foreach (var block in cell)
+        {
+            if (block is ParagraphBlock { Inline: not null } p)
+                sb.Append(InlinesToPlainText(p.Inline));
+        }
+        return sb.ToString().Trim();
+    }
+
+    internal static string InlinesToPlainText(ContainerInline inlines)
+    {
+        var sb = new StringBuilder();
+        foreach (var inline in inlines)
+            sb.Append(InlinToPlainText(inline));
+        return sb.ToString();
+    }
+
+    private static string InlinToPlainText(Inline inline) => inline switch
+    {
+        LiteralInline lit => lit.Content.ToString(),
+        CodeInline code => code.Content,
+        EmphasisInline em => InlinesToPlainText(em),
+        LineBreakInline { IsHard: true } => "\n",
+        LineBreakInline => " ",
+        LinkInline link => InlinesToPlainText(link),
+        _ => string.Empty,
+    };
 
     private static string InlinesToMarkup(ContainerInline inlines)
     {
