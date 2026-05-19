@@ -86,6 +86,87 @@ public class IpcServerTests
         Assert.Equal(todayPath, resp.Data!.Path);
     }
 
+    [Fact]
+    public async Task Note_read_list_property_renders_as_comma_separated()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        var path = fixture.WriteNote("aliases.md", "---\naliases: [render test, fm test]\n---\n\nbody\n");
+        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [ParseFrom(path)]);
+
+        await using var run = await IpcServerRun.StartAsync(
+            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Db)));
+
+        var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
+        {
+            ["path"] = path,
+            ["vaultPath"] = fixture.Vault.Path,
+        });
+
+        Assert.True(resp.Success, resp.Error);
+        Assert.Equal("render test, fm test", resp.Data!.Properties["aliases"]);
+    }
+
+    [Fact]
+    public async Task Note_read_tags_property_is_omitted_from_properties_table()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        var path = fixture.WriteNote("tagged.md", "---\ntags: [test, pumex]\ntitle: Hello\n---\n\nbody\n");
+        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [ParseFrom(path)]);
+
+        await using var run = await IpcServerRun.StartAsync(
+            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Db)));
+
+        var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
+        {
+            ["path"] = path,
+            ["vaultPath"] = fixture.Vault.Path,
+        });
+
+        Assert.True(resp.Success, resp.Error);
+        Assert.DoesNotContain("tags", resp.Data!.Properties.Keys);
+        Assert.Equal("Hello", resp.Data!.Properties["title"]);
+    }
+
+    [Fact]
+    public async Task Note_read_nested_object_property_renders_as_key_value_pairs()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        var path = fixture.WriteNote("nested.md", "---\nmeta:\n  author: Alice\n  labels: [a, b]\n---\n\nbody\n");
+        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [ParseFrom(path)]);
+
+        await using var run = await IpcServerRun.StartAsync(
+            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Db)));
+
+        var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
+        {
+            ["path"] = path,
+            ["vaultPath"] = fixture.Vault.Path,
+        });
+
+        Assert.True(resp.Success, resp.Error);
+        Assert.Equal("author: Alice, labels: a, b", resp.Data!.Properties["meta"]);
+    }
+
+    [Fact]
+    public async Task Note_read_empty_list_property_renders_as_empty_string()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        var path = fixture.WriteNote("emptylist.md", "---\naliases: []\n---\n\nbody\n");
+        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [ParseFrom(path)]);
+
+        await using var run = await IpcServerRun.StartAsync(
+            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Db)));
+
+        var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
+        {
+            ["path"] = path,
+            ["vaultPath"] = fixture.Vault.Path,
+        });
+
+        Assert.True(resp.Success, resp.Error);
+        Assert.Equal("", resp.Data!.Properties["aliases"]);
+    }
+
     private static NoteDocument ParseFrom(string path) => new NoteParser().Parse(path);
 
     private sealed class IpcServerRun : IAsyncDisposable

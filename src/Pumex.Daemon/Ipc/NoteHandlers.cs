@@ -24,7 +24,8 @@ public class NoteReadHandler : ICommandHandler
 
         var doc = _parser.Parse(path);
         var props = doc.Frontmatter
-            .ToDictionary(kv => kv.Key, kv => kv.Value?.ToString() ?? "");
+            .Where(kv => !kv.Key.Equals("tags", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(kv => kv.Key, kv => FormatFrontmatterValue(kv.Value));
 
         return new NoteContent(
             Path: path,
@@ -34,6 +35,17 @@ public class NoteReadHandler : ICommandHandler
             Tags: doc.Tags,
             OutgoingLinks: doc.OutgoingLinks);
     }
+
+    private static string FormatFrontmatterValue(object? value) => value switch
+    {
+        null => "",
+        string s => s,
+        System.Collections.IDictionary dict => string.Join(", ",
+            dict.Keys.Cast<object>().Select(k => $"{k}: {FormatFrontmatterValue(dict[k])}")),
+        System.Collections.IEnumerable seq => string.Join(", ",
+            seq.Cast<object?>().Select(e => e?.ToString() ?? "")),
+        _ => value.ToString() ?? "",
+    };
 }
 
 public class NoteCreateHandler : ICommandHandler
