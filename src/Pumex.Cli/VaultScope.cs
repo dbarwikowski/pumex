@@ -27,7 +27,7 @@ public record VaultScope(string? Name, string? Path, bool IsExplicit)
     /// <summary>
     /// Base directory for resolving user-supplied relative paths. Only set
     /// when the vault was picked explicitly — auto-discovery preserves the
-    /// CWD-relative behavior users already expect.
+    /// CWD-relative behaviour users already expect.
     /// </summary>
     public string? RelativeRoot => IsExplicit ? Path : null;
 }
@@ -35,44 +35,17 @@ public record VaultScope(string? Name, string? Path, bool IsExplicit)
 public static class VaultArgs
 {
     /// <summary>
-    /// Strips <c>--vault NAME</c>, <c>--vault-path PATH</c> and <c>--all</c>
-    /// from <paramref name="args"/>. Falls back to <see cref="PumexPaths.FindVaultRoot"/>
-    /// against the current working directory when no override is given.
+    /// Builds a <see cref="VaultScope"/> from the three parsed vault options.
+    /// Falls back to <see cref="PumexPaths.FindVaultRoot"/> against CWD when
+    /// no override is given.
     /// </summary>
-    public static (VaultScope Scope, string[] Remaining) Extract(string[] args, string? cwd = null)
+    public static VaultScope ScopeFrom(string? vault, string? vaultPath, bool all)
     {
-        string? name = null;
-        string? explicitPath = null;
-        var explicitGlobal = false;
-        var remaining = new List<string>(args.Length);
-
-        for (var i = 0; i < args.Length; i++)
-        {
-            switch (args[i])
-            {
-                case "--vault" when i + 1 < args.Length:
-                    name = args[++i];
-                    break;
-                case "--vault-path" when i + 1 < args.Length:
-                    explicitPath = System.IO.Path.GetFullPath(args[++i]);
-                    break;
-                case "--all":
-                    explicitGlobal = true;
-                    break;
-                default:
-                    remaining.Add(args[i]);
-                    break;
-            }
-        }
-
-        if (explicitGlobal)
-            return (VaultScope.Global, remaining.ToArray());
-
-        if (name is not null || explicitPath is not null)
-            return (new VaultScope(name, explicitPath, IsExplicit: true), remaining.ToArray());
-
-        var root = PumexPaths.FindVaultRoot(cwd ?? Environment.CurrentDirectory);
-        return (new VaultScope(null, root, IsExplicit: false), remaining.ToArray());
+        if (all) return VaultScope.Global;
+        if (vault is not null || vaultPath is not null)
+            return new VaultScope(vault, vaultPath is not null ? System.IO.Path.GetFullPath(vaultPath) : null, IsExplicit: true);
+        var root = PumexPaths.FindVaultRoot(Environment.CurrentDirectory);
+        return new VaultScope(null, root, IsExplicit: false);
     }
 
     /// <summary>
