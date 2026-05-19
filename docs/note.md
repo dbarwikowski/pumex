@@ -42,7 +42,7 @@ Reads and displays the note. Without `--raw`:
 
 - Frontmatter properties are shown in a table.
 - Inline tags are shown as `#tag` labels.
-- The body is rendered as Markdown: headings, code blocks, bold/italic, lists, blockquotes, and thematic breaks.
+- The body is rendered as Markdown: headings, tables, code blocks, bold/italic, lists, blockquotes, and thematic breaks.
 
 With `--raw`, the file is printed exactly as stored on disk, including frontmatter delimiters.
 
