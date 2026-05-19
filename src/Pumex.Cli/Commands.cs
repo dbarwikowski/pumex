@@ -13,13 +13,17 @@ public static class Commands
         WriteIndented = true,
     };
 
-    public static async Task<int> NewVaultAsync(IpcClient client, string[] args)
+    public static async Task<int> PingAsync(IpcClient client)
     {
-        if (args.Length == 0) return Usage("pumex new <name> [path]");
+        var resp = await client.SendAsync<string>("ping");
+        if (!resp.Success) return Error(resp.Error);
+        AnsiConsole.MarkupLine($"[green]{resp.Data?.EscapeMarkup() ?? "ok"}[/]");
+        return 0;
+    }
 
-        var name = args[0];
-        var vaultPath = args.Length >= 2 ? Path.GetFullPath(args[1]) : Environment.CurrentDirectory;
-
+    public static async Task<int> NewVaultAsync(IpcClient client, string name, string? path)
+    {
+        var vaultPath = path is not null ? Path.GetFullPath(path) : Environment.CurrentDirectory;
         Directory.CreateDirectory(vaultPath);
 
         var markerDir = Path.Combine(vaultPath, PumexPaths.VaultMarkerDir);
@@ -36,8 +40,6 @@ public static class Commands
             AnsiConsole.MarkupLine($"[green]initialized[/] vault [bold]{name.EscapeMarkup()}[/] at {vaultPath.EscapeMarkup()}");
         }
 
-        // Try to register with the daemon. If it's not running, the marker is
-        // written and the user can register later.
         try
         {
             var resp = await client.SendAsync<VaultRecord>("vault:add", new()
@@ -59,51 +61,22 @@ public static class Commands
         return 0;
     }
 
-    public static async Task<int> PingAsync(IpcClient client)
+    public static async Task<int> SearchAsync(IpcClient client, string? query, string[] tags, string[] properties, int? limit, VaultScope scope)
     {
-        var resp = await client.SendAsync<string>("ping");
-        if (!resp.Success) return Error(resp.Error);
+        var expandedTags = ExpandTags(tags).ToList();
+        var expandedProps = ExpandProperties(properties).ToList();
 
-        AnsiConsole.MarkupLine($"[green]{resp.Data?.EscapeMarkup() ?? "ok"}[/]");
-        return 0;
-    }
-
-    public static async Task<int> SearchAsync(IpcClient client, string[] args)
-    {
-        var (scope, rest) = VaultArgs.Extract(args);
-
-        // First positional arg (if any) is the FTS query. A leading flag
-        // means the user is doing a filter-only search like `--tag work`.
-        string? query = rest.Length > 0 && !rest[0].StartsWith("--") ? rest[0] : null;
-        var startFlags = query is null ? 0 : 1;
-
-        var tags = new List<string>();
-        var properties = new List<string>();
-        string? limit = null;
-        for (var i = startFlags; i < rest.Length; i++)
+        if (query is null && expandedTags.Count == 0 && expandedProps.Count == 0)
         {
-            switch (rest[i])
-            {
-                case "--limit" when i + 1 < rest.Length:
-                    limit = rest[++i];
-                    break;
-                case "--tag" when i + 1 < rest.Length:
-                    tags.Add(rest[++i]);
-                    break;
-                case "--property" when i + 1 < rest.Length:
-                    properties.Add(rest[++i]);
-                    break;
-            }
+            AnsiConsole.MarkupLine("[yellow]usage:[/] pumex search <query> [--tag X] [--property k=v] [--limit N] [--vault ...]");
+            return 64;
         }
-
-        if (query is null && tags.Count == 0 && properties.Count == 0)
-            return Usage("pumex search <query> [--tag X] [--property k=v] [--limit N] [--vault ...]");
 
         var requestArgs = new Dictionary<string, string>();
         if (query is not null) requestArgs["query"] = query;
-        if (limit is not null) requestArgs["limit"] = limit;
-        if (tags.Count > 0) requestArgs["tags"] = string.Join(',', tags);
-        if (properties.Count > 0) requestArgs["properties"] = string.Join(';', properties);
+        if (limit is not null) requestArgs["limit"] = limit.Value.ToString();
+        if (expandedTags.Count > 0) requestArgs["tags"] = string.Join(',', expandedTags);
+        if (expandedProps.Count > 0) requestArgs["properties"] = string.Join(';', expandedProps);
         scope.ApplyTo(requestArgs);
 
         var resp = await client.SendAsync<List<SearchResult>>("search", requestArgs);
@@ -122,14 +95,12 @@ public static class Commands
         table.AddColumn("Snippet");
         foreach (var r in results)
             table.AddRow(r.Name.EscapeMarkup(), r.Path.EscapeMarkup(), r.Snippet.EscapeMarkup());
-
         AnsiConsole.Write(table);
         return 0;
     }
 
-    public static async Task<int> TagsAsync(IpcClient client, string[] args)
+    public static async Task<int> TagsAsync(IpcClient client, VaultScope scope)
     {
-        var (scope, _) = VaultArgs.Extract(args);
         var requestArgs = new Dictionary<string, string>();
         scope.ApplyTo(requestArgs);
 
@@ -148,17 +119,13 @@ public static class Commands
         table.AddColumn(new TableColumn("Count").RightAligned());
         foreach (var t in tags)
             table.AddRow($"#{t.Tag.EscapeMarkup()}", t.Count.ToString());
-
         AnsiConsole.Write(table);
         return 0;
     }
 
-    public static async Task<int> BacklinksAsync(IpcClient client, string[] args)
+    public static async Task<int> BacklinksAsync(IpcClient client, string note, VaultScope scope)
     {
-        var (scope, rest) = VaultArgs.Extract(args);
-        if (rest.Length == 0) return Usage("pumex backlinks <path> [--vault NAME | --vault-path PATH | --all]");
-
-        var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, rest[0]) };
+        var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, note) };
         scope.ApplyTo(requestArgs);
 
         var resp = await client.SendAsync<List<string>>("backlinks", requestArgs);
@@ -175,7 +142,7 @@ public static class Commands
         return 0;
     }
 
-    public static async Task<int> VaultsAsync(IpcClient client)
+    public static async Task<int> VaultListAsync(IpcClient client)
     {
         var resp = await client.SendAsync<List<VaultRecord>>("vaults");
         if (!resp.Success) return Error(resp.Error);
@@ -192,34 +159,16 @@ public static class Commands
         table.AddColumn("Path");
         foreach (var v in vaults)
             table.AddRow(v.Name.EscapeMarkup(), v.Path.EscapeMarkup());
-
         AnsiConsole.Write(table);
         return 0;
     }
 
-    public static async Task<int> VaultAsync(IpcClient client, string[] args)
+    public static async Task<int> VaultAddAsync(IpcClient client, string name, string path)
     {
-        if (args.Length < 1) return Usage("pumex vault <add|remove> ...");
-
-        return args[0] switch
-        {
-            "add"    => await VaultAddAsync(client, args[1..]),
-            "remove" => await VaultRemoveAsync(client, args[1..]),
-            _        => Usage("pumex vault <add|remove> ..."),
-        };
-    }
-
-    private static async Task<int> VaultAddAsync(IpcClient client, string[] args)
-    {
-        if (args.Length < 2) return Usage("pumex vault add <name> <path>");
-
-        var name = args[0];
-        var path = Path.GetFullPath(args[1]);
-
         var resp = await client.SendAsync<VaultRecord>("vault:add", new()
         {
             ["name"] = name,
-            ["path"] = path,
+            ["path"] = Path.GetFullPath(path),
         });
         if (!resp.Success) return Error(resp.Error);
 
@@ -228,11 +177,9 @@ public static class Commands
         return 0;
     }
 
-    private static async Task<int> VaultRemoveAsync(IpcClient client, string[] args)
+    public static async Task<int> VaultRemoveAsync(IpcClient client, string name)
     {
-        if (args.Length < 1) return Usage("pumex vault remove <name>");
-
-        var resp = await client.SendAsync<VaultRecord>("vault:remove", new() { ["name"] = args[0] });
+        var resp = await client.SendAsync<VaultRecord>("vault:remove", new() { ["name"] = name });
         if (!resp.Success) return Error(resp.Error);
 
         var v = resp.Data!;
@@ -240,39 +187,8 @@ public static class Commands
         return 0;
     }
 
-    public static async Task<int> NoteAsync(IpcClient client, string[] args)
+    public static async Task<int> ListAsync(IpcClient client, VaultScope scope)
     {
-        if (args.Length == 0) return Usage("pumex note <read|create|append|delete|list> ...");
-
-        return args[0] switch
-        {
-            "read"   => await NoteReadAsync(client, args[1..]),
-            "create" => await NoteWriteAsync(client, args[1..], "note:create"),
-            "append" => await NoteWriteAsync(client, args[1..], "note:append"),
-            "delete" => await NoteDeleteAsync(client, args[1..]),
-            "list"   => await NoteListAsync(client, args[1..]),
-            _        => Usage("pumex note <read|create|append|delete|list> ..."),
-        };
-    }
-
-    private static async Task<int> NoteDeleteAsync(IpcClient client, string[] args)
-    {
-        var (scope, rest) = VaultArgs.Extract(args);
-        if (rest.Length == 0) return Usage("pumex note delete <path-or-name> [--vault NAME | --vault-path PATH]");
-
-        var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, rest[0]) };
-        scope.ApplyTo(requestArgs);
-
-        var resp = await client.SendAsync<NotePathResult>("note:delete", requestArgs);
-        if (!resp.Success) return Error(resp.Error);
-
-        AnsiConsole.MarkupLine($"[green]deleted[/] {resp.Data!.Path.EscapeMarkup()}");
-        return 0;
-    }
-
-    private static async Task<int> NoteListAsync(IpcClient client, string[] args)
-    {
-        var (scope, _) = VaultArgs.Extract(args);
         var requestArgs = new Dictionary<string, string>();
         scope.ApplyTo(requestArgs);
 
@@ -295,109 +211,130 @@ public static class Commands
             var when = DateTimeOffset.FromUnixTimeSeconds(n.Mtime).LocalDateTime.ToString("yyyy-MM-dd HH:mm");
             table.AddRow(n.Name.EscapeMarkup(), n.Path.EscapeMarkup(), when);
         }
-
         AnsiConsole.Write(table);
         return 0;
     }
 
-    private static async Task<int> NoteReadAsync(IpcClient client, string[] args)
+    public static async Task<int> ReadAsync(IpcClient client, string note, bool raw, VaultScope scope)
     {
-        var (scope, rest) = VaultArgs.Extract(args);
-        if (rest.Length == 0) return Usage("pumex note read <path> [--raw] [--vault NAME | --vault-path PATH]");
-
-        var path = VaultArgs.ResolvePath(scope, rest[0]);
-        var raw = rest.Contains("--raw");
-
-        var requestArgs = new Dictionary<string, string> { ["path"] = path };
+        var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, note) };
         scope.ApplyTo(requestArgs);
 
         var resp = await client.SendAsync<NoteContent>("note:read", requestArgs);
         if (!resp.Success) return Error(resp.Error);
 
-        var note = resp.Data!;
+        var content = resp.Data!;
         if (raw)
         {
-            AnsiConsole.WriteLine(note.Raw);
+            AnsiConsole.WriteLine(content.Raw);
             return 0;
         }
 
-        if (note.Properties.Count > 0)
+        if (content.Properties.Count > 0)
         {
             var table = new Table().Border(TableBorder.Minimal);
             table.AddColumn("Property");
             table.AddColumn("Value");
-            foreach (var (k, v) in note.Properties)
+            foreach (var (k, v) in content.Properties)
                 table.AddRow(k.EscapeMarkup(), v.EscapeMarkup());
             AnsiConsole.Write(table);
         }
-        if (note.Tags.Count > 0)
-            AnsiConsole.MarkupLine("[dim]tags:[/] " + string.Join(" ", note.Tags.Select(t => $"[blue]#{t.EscapeMarkup()}[/]")));
+        if (content.Tags.Count > 0)
+            AnsiConsole.MarkupLine("[dim]tags:[/] " + string.Join(" ", content.Tags.Select(t => $"[blue]#{t.EscapeMarkup()}[/]")));
         AnsiConsole.WriteLine();
-        MarkdownRenderer.Render(note.Body);
+        MarkdownRenderer.Render(content.Body);
         return 0;
     }
 
-    private static async Task<int> NoteWriteAsync(IpcClient client, string[] args, string command)
+    public static async Task<int> CreateAsync(IpcClient client, string note, string? content, VaultScope scope)
     {
-        var (scope, rest) = VaultArgs.Extract(args);
-        if (rest.Length == 0) return Usage($"pumex note {command[5..]} <path-or-name> [--content TEXT | --stdin] [--inline] [--vault NAME]");
-
-        var path = VaultArgs.ResolvePath(scope, rest[0]);
-        string? content = null;
-        var inline = false;
-        for (var i = 1; i < rest.Length; i++)
-        {
-            switch (rest[i])
-            {
-                case "--content" when i + 1 < rest.Length:
-                    content = rest[++i];
-                    break;
-                case "--stdin":
-                    content = await Console.In.ReadToEndAsync();
-                    break;
-                case "--inline":
-                    inline = true;
-                    break;
-            }
-        }
-
-        if (content is null && !Console.IsInputRedirected)
-        {
-            AnsiConsole.MarkupLine("[yellow]error:[/] no content. Use [bold]--content TEXT[/] or pipe via [bold]--stdin[/].");
-            return 64;
-        }
-        content ??= await Console.In.ReadToEndAsync();
+        content ??= await ReadStdinOrError();
+        if (content is null) return 64;
 
         var requestArgs = new Dictionary<string, string>
         {
-            ["path"] = path,
+            ["path"] = VaultArgs.ResolvePath(scope, note),
+            ["content"] = content,
+        };
+        scope.ApplyTo(requestArgs);
+
+        var resp = await client.SendAsync<NotePathResult>("note:create", requestArgs);
+        if (!resp.Success) return Error(resp.Error);
+
+        AnsiConsole.MarkupLine($"[green]created[/] {resp.Data!.Path.EscapeMarkup()}");
+        return 0;
+    }
+
+    public static async Task<int> AppendAsync(IpcClient client, string note, string? content, bool inline, VaultScope scope)
+    {
+        content ??= await ReadStdinOrError();
+        if (content is null) return 64;
+
+        var requestArgs = new Dictionary<string, string>
+        {
+            ["path"] = VaultArgs.ResolvePath(scope, note),
             ["content"] = content,
         };
         scope.ApplyTo(requestArgs);
         if (inline) requestArgs["inline"] = "true";
 
-        var resp = await client.SendAsync<NotePathResult>(command, requestArgs);
+        var resp = await client.SendAsync<NotePathResult>("note:append", requestArgs);
         if (!resp.Success) return Error(resp.Error);
 
-        AnsiConsole.MarkupLine($"[green]{(command == "note:create" ? "created" : "appended")}[/] {resp.Data!.Path.EscapeMarkup()}");
+        AnsiConsole.MarkupLine($"[green]appended[/] {resp.Data!.Path.EscapeMarkup()}");
         return 0;
     }
 
-    public static async Task<int> DailyAsync(IpcClient client, string[] args)
+    public static async Task<int> DeleteAsync(IpcClient client, string note, VaultScope scope)
     {
-        // `pumex daily` (no subcommand) is shorthand for `daily read`.
-        if (args.Length == 0 || args[0].StartsWith("--") || args[0] == "read")
-            return await DailyReadAsync(client, args.Length > 0 && args[0] == "read" ? args[1..] : args);
-        if (args[0] == "append")
-            return await DailyAppendAsync(client, args[1..]);
-        return Usage("pumex daily [read|append] [--date YYYY-MM-DD] ...");
+        var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, note) };
+        scope.ApplyTo(requestArgs);
+
+        var resp = await client.SendAsync<NotePathResult>("note:delete", requestArgs);
+        if (!resp.Success) return Error(resp.Error);
+
+        AnsiConsole.MarkupLine($"[green]deleted[/] {resp.Data!.Path.EscapeMarkup()}");
+        return 0;
     }
 
-    private static async Task<int> DailyReadAsync(IpcClient client, string[] args)
+    public static async Task<int> PropAsync(IpcClient client, string note, string? key, string? value, VaultScope scope)
     {
-        var (scope, rest) = VaultArgs.Extract(args);
-        var date = ExtractFlagValue(rest, "--date");
+        var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, note) };
+        scope.ApplyTo(requestArgs);
 
+        if (key is null)
+        {
+            var resp = await client.SendAsync<List<PropertyEntry>>("property:list", requestArgs);
+            if (!resp.Success) return Error(resp.Error);
+            var props = resp.Data ?? [];
+            if (props.Count == 0) { AnsiConsole.MarkupLine("[dim]no properties[/]"); return 0; }
+            var table = new Table().Border(TableBorder.Minimal);
+            table.AddColumn("Property");
+            table.AddColumn("Value");
+            foreach (var p in props) table.AddRow(p.Key.EscapeMarkup(), p.Value.EscapeMarkup());
+            AnsiConsole.Write(table);
+            return 0;
+        }
+
+        requestArgs["key"] = key;
+
+        if (value is null)
+        {
+            var resp = await client.SendAsync<string>("property:get", requestArgs);
+            if (!resp.Success) return Error(resp.Error);
+            AnsiConsole.WriteLine(resp.Data ?? "");
+            return 0;
+        }
+
+        requestArgs["value"] = value;
+        var setResp = await client.SendAsync<NotePathResult>("property:set", requestArgs);
+        if (!setResp.Success) return Error(setResp.Error);
+        AnsiConsole.MarkupLine($"[green]set[/] {key.EscapeMarkup()}={value.EscapeMarkup()} on {setResp.Data!.Path.EscapeMarkup()}");
+        return 0;
+    }
+
+    public static async Task<int> DailyAsync(IpcClient client, string? date, VaultScope scope)
+    {
         var requestArgs = new Dictionary<string, string>();
         scope.ApplyTo(requestArgs);
         if (date is not null) requestArgs["date"] = date;
@@ -412,39 +349,12 @@ public static class Commands
         return 0;
     }
 
-    private static async Task<int> DailyAppendAsync(IpcClient client, string[] args)
+    public static async Task<int> DailyAppendAsync(IpcClient client, string? content, bool inline, string? date, VaultScope scope)
     {
-        var (scope, rest) = VaultArgs.Extract(args);
-        var date = ExtractFlagValue(rest, "--date");
-        string? content = null;
-        var inline = false;
-        for (var i = 0; i < rest.Length; i++)
-        {
-            switch (rest[i])
-            {
-                case "--content" when i + 1 < rest.Length:
-                    content = rest[++i];
-                    break;
-                case "--stdin":
-                    content = await Console.In.ReadToEndAsync();
-                    break;
-                case "--inline":
-                    inline = true;
-                    break;
-            }
-        }
+        content ??= await ReadStdinOrError();
+        if (content is null) return 64;
 
-        if (content is null && !Console.IsInputRedirected)
-        {
-            AnsiConsole.MarkupLine("[yellow]error:[/] no content. Use [bold]--content TEXT[/] or pipe via [bold]--stdin[/].");
-            return 64;
-        }
-        content ??= await Console.In.ReadToEndAsync();
-
-        var requestArgs = new Dictionary<string, string>
-        {
-            ["content"] = content,
-        };
+        var requestArgs = new Dictionary<string, string> { ["content"] = content };
         scope.ApplyTo(requestArgs);
         if (date is not null) requestArgs["date"] = date;
         if (inline) requestArgs["inline"] = "true";
@@ -456,142 +366,7 @@ public static class Commands
         return 0;
     }
 
-    private static string? ExtractFlagValue(string[] args, string flag)
-    {
-        for (var i = 0; i < args.Length - 1; i++)
-            if (args[i] == flag) return args[i + 1];
-        return null;
-    }
-
-    public static async Task<int> PropertyAsync(IpcClient client, string[] args)
-    {
-        if (args.Length == 0) return Usage("pumex property <list|get|set> ...");
-
-        return args[0] switch
-        {
-            "list" => await PropertyListAsync(client, args[1..]),
-            "get" => await PropertyGetAsync(client, args[1..]),
-            "set" => await PropertySetAsync(client, args[1..]),
-            _ => Usage("pumex property <list|get|set> ..."),
-        };
-    }
-
-    private static async Task<int> PropertyListAsync(IpcClient client, string[] args)
-    {
-        var (scope, rest) = VaultArgs.Extract(args);
-        if (rest.Length == 0) return Usage("pumex property list <path-or-name> [--vault NAME | --vault-path PATH]");
-
-        var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, rest[0]) };
-        scope.ApplyTo(requestArgs);
-
-        var resp = await client.SendAsync<List<PropertyEntry>>("property:list", requestArgs);
-        if (!resp.Success) return Error(resp.Error);
-
-        var props = resp.Data ?? [];
-        if (props.Count == 0)
-        {
-            AnsiConsole.MarkupLine("[dim]no properties[/]");
-            return 0;
-        }
-
-        var table = new Table().Border(TableBorder.Minimal);
-        table.AddColumn("Property");
-        table.AddColumn("Value");
-        foreach (var p in props) table.AddRow(p.Key.EscapeMarkup(), p.Value.EscapeMarkup());
-        AnsiConsole.Write(table);
-        return 0;
-    }
-
-    private static async Task<int> PropertyGetAsync(IpcClient client, string[] args)
-    {
-        var (scope, rest) = VaultArgs.Extract(args);
-        if (rest.Length < 2) return Usage("pumex property get <path-or-name> <key> [--vault NAME | --vault-path PATH]");
-
-        var requestArgs = new Dictionary<string, string>
-        {
-            ["path"] = VaultArgs.ResolvePath(scope, rest[0]),
-            ["key"] = rest[1],
-        };
-        scope.ApplyTo(requestArgs);
-
-        var resp = await client.SendAsync<string>("property:get", requestArgs);
-        if (!resp.Success) return Error(resp.Error);
-
-        AnsiConsole.WriteLine(resp.Data ?? "");
-        return 0;
-    }
-
-    private static async Task<int> PropertySetAsync(IpcClient client, string[] args)
-    {
-        var (scope, rest) = VaultArgs.Extract(args);
-        if (rest.Length < 3) return Usage("pumex property set <path-or-name> <key> <value> [--vault NAME | --vault-path PATH]");
-
-        var requestArgs = new Dictionary<string, string>
-        {
-            ["path"] = VaultArgs.ResolvePath(scope, rest[0]),
-            ["key"] = rest[1],
-            ["value"] = rest[2],
-        };
-        scope.ApplyTo(requestArgs);
-
-        var resp = await client.SendAsync<NotePathResult>("property:set", requestArgs);
-        if (!resp.Success) return Error(resp.Error);
-
-        AnsiConsole.MarkupLine($"[green]set[/] {rest[1].EscapeMarkup()}={rest[2].EscapeMarkup()} on {resp.Data!.Path.EscapeMarkup()}");
-        return 0;
-    }
-
-    public static async Task<int> DaemonAsync(IpcClient client, string[] args)
-    {
-        if (args.Length == 0) return Usage("pumex daemon <status|install|uninstall|restart> [--daemon-path PATH]");
-
-        return args[0] switch
-        {
-            "status" => await DaemonStatusAsync(client),
-            "install" => await DaemonInstallAsync(args[1..], install: true),
-            "uninstall" => await DaemonInstallAsync(args[1..], install: false),
-            "restart" => await DaemonRestartAsync(args[1..]),
-            _ => Usage("pumex daemon <status|install|uninstall|restart>"),
-        };
-    }
-
-    private static Task<int> DaemonInstallAsync(string[] args, bool install)
-    {
-        var daemonPath = ParseDaemonPath(args);
-        try
-        {
-            var installer = new DaemonInstaller(daemonPath);
-            return install ? installer.InstallAsync() : installer.UninstallAsync();
-        }
-        catch (FileNotFoundException ex)
-        {
-            return Task.FromResult(Error(ex.Message + " (use --daemon-path to override)"));
-        }
-    }
-
-    private static Task<int> DaemonRestartAsync(string[] args)
-    {
-        var daemonPath = ParseDaemonPath(args);
-        try
-        {
-            return new DaemonInstaller(daemonPath).RestartAsync();
-        }
-        catch (FileNotFoundException ex)
-        {
-            return Task.FromResult(Error(ex.Message + " (use --daemon-path to override)"));
-        }
-    }
-
-    private static string ParseDaemonPath(string[] args)
-    {
-        for (var i = 0; i < args.Length - 1; i++)
-        {
-            if (args[i] == "--daemon-path") return Path.GetFullPath(args[i + 1]);
-        }
-        return DaemonInstaller.AutoDetectDaemonPath();
-    }
-
-    private static async Task<int> DaemonStatusAsync(IpcClient client)
+    public static async Task<int> DaemonStatusAsync(IpcClient client)
     {
         try
         {
@@ -611,10 +386,62 @@ public static class Commands
         }
     }
 
-    private static int Usage(string line)
+    public static Task<int> DaemonInstallAsync(string? daemonPath) =>
+        RunInstaller(daemonPath, i => i.InstallAsync());
+
+    public static Task<int> DaemonUninstallAsync(string? daemonPath) =>
+        RunInstaller(daemonPath, i => i.UninstallAsync());
+
+    public static Task<int> DaemonRestartAsync(string? daemonPath) =>
+        RunInstaller(daemonPath, i => i.RestartAsync());
+
+    private static Task<int> RunInstaller(string? daemonPath, Func<DaemonInstaller, Task<int>> action)
     {
-        AnsiConsole.MarkupLine($"[yellow]usage:[/] {line.EscapeMarkup()}");
-        return 64;
+        try
+        {
+            var path = daemonPath is not null
+                ? Path.GetFullPath(daemonPath)
+                : DaemonInstaller.AutoDetectDaemonPath();
+            return action(new DaemonInstaller(path));
+        }
+        catch (FileNotFoundException ex)
+        {
+            return Task.FromResult(Error(ex.Message + " (use --daemon-path to override)"));
+        }
+    }
+
+    internal static IEnumerable<string> ExpandTags(IEnumerable<string> tags) =>
+        tags.SelectMany(t => t.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+    internal static IEnumerable<string> ExpandProperties(IEnumerable<string> items)
+    {
+        using var e = items.GetEnumerator();
+        while (e.MoveNext())
+        {
+            var current = e.Current;
+            if (current.Contains('='))
+            {
+                yield return current;
+            }
+            else if (e.MoveNext())
+            {
+                yield return $"{current}={e.Current}";
+            }
+            else
+            {
+                yield return current;
+            }
+        }
+    }
+
+    private static async Task<string?> ReadStdinOrError()
+    {
+        if (!Console.IsInputRedirected)
+        {
+            AnsiConsole.MarkupLine("[yellow]error:[/] no content. Use [bold]--content TEXT[/] or pipe stdin.");
+            return null;
+        }
+        return await Console.In.ReadToEndAsync();
     }
 
     private static int Error(string? message)
