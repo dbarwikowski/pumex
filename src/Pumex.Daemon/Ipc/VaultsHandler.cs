@@ -38,6 +38,10 @@ public class VaultAddHandler : ICommandHandler
         if (!Directory.Exists(fullPath))
             throw new ArgumentException($"Path does not exist: {fullPath}");
 
+        var existing = await _db.GetVaultByPathAsync(fullPath);
+        if (existing is not null && existing.Name != name)
+            throw new ArgumentException($"path already registered as vault '{existing.Name}'; remove it first.");
+
         await _db.AddVaultAsync(name, fullPath);
         var vault = await _db.GetVaultByPathAsync(fullPath)
             ?? throw new InvalidOperationException("Vault row missing after insert");

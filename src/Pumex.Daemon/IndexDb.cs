@@ -280,7 +280,13 @@ public class IndexDb : IDisposable
                 foreach (var (key, value) in note.Frontmatter)
                 {
                     pInsPropKey.Value   = key;
-                    pInsPropValue.Value = value?.ToString() ?? "";
+                    pInsPropValue.Value = value switch
+                    {
+                        null => "",
+                        System.Collections.IEnumerable list and not string =>
+                            string.Join(", ", list.Cast<object>().Select(o => o?.ToString() ?? "")),
+                        _ => value.ToString() ?? ""
+                    };
                     await insPropCmd.ExecuteNonQueryAsync();
                 }
 

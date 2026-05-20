@@ -68,7 +68,7 @@ public static class Commands
 
         if (query is null && expandedTags.Count == 0 && expandedProps.Count == 0)
         {
-            AnsiConsole.MarkupLine("[yellow]usage:[/] pumex search <query> [--tag X] [--property k=v] [--limit N] [--vault ...]");
+            AnsiConsole.MarkupLine("[yellow]usage:[/] pumex search <query> [[--tag X]] [[--property k=v]] [[--limit N]] [[--vault ...]]");
             return 64;
         }
 
@@ -411,7 +411,8 @@ public static class Commands
     }
 
     internal static IEnumerable<string> ExpandTags(IEnumerable<string> tags) =>
-        tags.SelectMany(t => t.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        tags.SelectMany(t => t.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(t => t.TrimStart('#'));
 
     internal static IEnumerable<string> ExpandProperties(IEnumerable<string> items)
     {
