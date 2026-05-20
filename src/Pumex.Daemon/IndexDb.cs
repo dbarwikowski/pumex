@@ -22,6 +22,7 @@ public class IndexDb : IDisposable
         _connection = new SqliteConnection($"Data Source={dbPath}");
         _connection.Open();
         ApplyPragmas();
+        MigrateLegacyFts();
         EnsureSchema();
     }
 
@@ -52,11 +53,15 @@ public class IndexDb : IDisposable
 
             -- Contentless FTS: notes_fts.rowid == notes.id. Body terms are
             -- indexed but the original text is not stored — snippets are
-            -- computed lazily from disk.
+            -- computed lazily from disk. contentless_delete=1 lets us issue
+            -- plain DELETE FROM notes_fts without supplying the original
+            -- column values (without it, the FTS doclist gets corrupted on
+            -- cascade delete from vaults — SQLITE_CORRUPT).
             CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
                 name,
                 body,
                 content='',
+                contentless_delete=1,
                 tokenize='unicode61'
             );
 
@@ -88,16 +93,48 @@ public class IndexDb : IDisposable
 
             -- Purge FTS rowids when notes are deleted (explicit DELETE *and*
             -- cascade from vaults). Without this, RemoveVaultAsync left FTS
-            -- orphans that grew the index file over time. Empty-string column
-            -- values are wrong for a contentless FTS5 table, but searches
-            -- JOIN notes_fts with notes(rowid), so any internal inconsistency
-            -- is invisible to query results — the rowid is what matters.
+            -- orphans that grew the index file over time. Requires
+            -- contentless_delete=1 on notes_fts — the prior 'delete' command
+            -- with empty column values corrupted the doclist on cascade.
             CREATE TRIGGER IF NOT EXISTS notes_fts_purge_after_delete
             AFTER DELETE ON notes BEGIN
-                INSERT INTO notes_fts(notes_fts, rowid, name, body)
-                VALUES('delete', old.id, '', '');
+                DELETE FROM notes_fts WHERE rowid = old.id;
             END;
         """);
+    }
+
+    // Pre-3.43-style contentless FTS5 tables don't support plain DELETE and
+    // their 'delete'-command-with-empty-strings substitute corrupts the
+    // doclist on cascade DELETE. If we find such a table, drop it (and the
+    // old trigger) so EnsureSchema can recreate them with
+    // contentless_delete=1, then zero out notes.mtime so the next full scan
+    // re-indexes every note's body into the empty FTS.
+    private void MigrateLegacyFts()
+    {
+        if (!TableExists("notes_fts")) return;
+
+        string? createSql;
+        using (var cmd = _connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'notes_fts'";
+            createSql = cmd.ExecuteScalar() as string;
+        }
+        if (createSql is null || createSql.Contains("contentless_delete", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        Execute("""
+            DROP TRIGGER IF EXISTS notes_fts_purge_after_delete;
+            DROP TABLE notes_fts;
+            UPDATE notes SET mtime = 0;
+        """);
+    }
+
+    private bool TableExists(string name)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = @name";
+        cmd.Parameters.AddWithValue("@name", name);
+        return cmd.ExecuteScalar() is not null;
     }
 
     // -------------------------
@@ -240,7 +277,7 @@ public class IndexDb : IDisposable
         var pInsLinkNoteId = insLinkCmd.Parameters.Add("$noteId", SqliteType.Integer);
         var pInsLinkTarget = insLinkCmd.Parameters.Add("$target", SqliteType.Text);
 
-        using var ftsDelCmd = PrepareById(tx, "INSERT INTO notes_fts(notes_fts, rowid, name, body) VALUES('delete', $id, '', '')", out var pFtsDelId);
+        using var ftsDelCmd = PrepareById(tx, "DELETE FROM notes_fts WHERE rowid = $id", out var pFtsDelId);
 
         using var ftsInsCmd = _connection.CreateCommand();
         ftsInsCmd.Transaction = tx;
@@ -298,9 +335,9 @@ public class IndexDb : IDisposable
                 }
 
                 // Contentless FTS doesn't support UPDATE — delete then insert.
+                // DELETE on a missing rowid is a no-op (contentless_delete=1).
                 pFtsDelId.Value = noteId;
-                try { await ftsDelCmd.ExecuteNonQueryAsync(); }
-                catch (SqliteException) { /* row not in FTS yet — first insert */ }
+                await ftsDelCmd.ExecuteNonQueryAsync();
 
                 pFtsInsId.Value   = noteId;
                 pFtsInsName.Value = name;

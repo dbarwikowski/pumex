@@ -1,3 +1,5 @@
+using Microsoft.Data.Sqlite;
+
 namespace Pumex.Daemon.Tests;
 
 public class IndexDbTests : IDisposable
@@ -294,6 +296,74 @@ public class IndexDbTests : IDisposable
         Assert.Null(await _db.GetVaultByNameAsync("doomed"));
         Assert.Empty(await _db.GetTagsAsync(vaultId));
         Assert.Empty(await _db.GetAllPathsAsync(vaultId));
+    }
+
+    [Fact]
+    public void Constructor_migrates_legacy_fts_schema_and_resets_mtimes()
+    {
+        // Build a fresh DB with the *old* FTS schema (no contentless_delete)
+        // outside IndexDb, then open it via IndexDb and confirm migration.
+        var dir = Path.Combine(Path.GetTempPath(), "pumex-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var legacyDbPath = Path.Combine(dir, "index.db");
+        try
+        {
+            using (var raw = new SqliteConnection($"Data Source={legacyDbPath}"))
+            {
+                raw.Open();
+                using var seed = raw.CreateCommand();
+                seed.CommandText = """
+                    CREATE TABLE vaults (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, path TEXT UNIQUE NOT NULL);
+                    CREATE TABLE notes (id INTEGER PRIMARY KEY, vault_id INTEGER, path TEXT UNIQUE NOT NULL,
+                                        name TEXT NOT NULL, mtime INTEGER NOT NULL, size INTEGER NOT NULL);
+                    CREATE VIRTUAL TABLE notes_fts USING fts5(name, body, content='', tokenize='unicode61');
+                    INSERT INTO vaults(id, name, path) VALUES (1, 'v', '/v');
+                    INSERT INTO notes(id, vault_id, path, name, mtime, size) VALUES (1, 1, '/v/a.md', 'a', 12345, 0);
+                    """;
+                seed.ExecuteNonQuery();
+            }
+
+            using var db = new IndexDb(legacyDbPath);
+
+            using var check = new SqliteConnection($"Data Source={legacyDbPath}");
+            check.Open();
+            using var schemaCmd = check.CreateCommand();
+            schemaCmd.CommandText = "SELECT sql FROM sqlite_master WHERE name = 'notes_fts'";
+            var sql = (string?)schemaCmd.ExecuteScalar();
+            Assert.NotNull(sql);
+            Assert.Contains("contentless_delete", sql!, StringComparison.OrdinalIgnoreCase);
+
+            using var mtimeCmd = check.CreateCommand();
+            mtimeCmd.CommandText = "SELECT mtime FROM notes WHERE id = 1";
+            Assert.Equal(0L, (long)mtimeCmd.ExecuteScalar()!);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task RemoveVaultAsync_with_indexed_bodies_does_not_corrupt_fts()
+    {
+        // Regression: the old notes_fts_purge_after_delete trigger fed empty
+        // strings into FTS5's 'delete' command, which corrupted the doclist
+        // when cascade DELETE from vaults fired the trigger across many notes.
+        // SQLite then threw SQLITE_CORRUPT ("database disk image is malformed")
+        // even though PRAGMA integrity_check returned ok.
+        var vaultId = await _db.AddVaultAsync("doomed", "/doomed");
+        var notes = Enumerable.Range(0, 25)
+            .Select(i => MakeNote($"/doomed/n{i}.md", body: $"the quick brown fox #{i}"))
+            .ToList();
+        await _db.UpsertNotesAsync(vaultId, notes);
+
+        await _db.RemoveVaultAsync(vaultId);
+
+        Assert.Empty(await _db.GetAllPathsAsync(vaultId));
+        // And the FTS is genuinely searchable afterwards on a new vault.
+        var freshId = await _db.AddVaultAsync("fresh", "/fresh");
+        await _db.UpsertNotesAsync(freshId, [MakeNote("/fresh/n.md", body: "zebrafinch")]);
+        Assert.Single(await _db.SearchAsync("zebrafinch"));
     }
 
     [Fact]
