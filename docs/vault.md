@@ -4,8 +4,40 @@ Manage vault registrations.
 
 ## Subcommands
 
+- [list](#list) — list registered vaults
 - [add](#add) — register a directory as a vault
 - [remove](#remove) — unregister a vault
+
+---
+
+## list
+
+List all vaults registered with the daemon.
+
+### Synopsis
+
+```
+pumex vault list
+```
+
+### Description
+
+Displays a table of every vault the daemon is currently tracking, showing its name and root directory path.
+
+### Output
+
+```
+ Name     │ Path
+ ─────────┼──────────────────────
+ work     │ C:\notes\work
+ personal │ C:\notes\personal
+```
+
+### Examples
+
+```
+pumex vault list
+```
 
 ---
 
@@ -69,7 +101,6 @@ To re-add the vault later, use `pumex vault add` again.
 pumex vault remove work
 ```
 
-### See also
+## See also
 
-- [`pumex vaults`](vaults.md) — list registered vaults
 - [`pumex new`](new.md) — create and register a new vault

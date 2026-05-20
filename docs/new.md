@@ -42,4 +42,4 @@ pumex new personal ~/notes/personal
 ## See also
 
 - [`pumex vault add`](vault.md#add) — register an existing directory without writing a marker
-- [`pumex vaults`](vaults.md) — list registered vaults
+- [`pumex vault list`](vault.md#list) — list registered vaults

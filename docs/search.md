@@ -19,8 +19,8 @@ pumex search [<query>] [--tag TAG]... [--property k=v]... [--limit N]
 
 | Flag | Description |
 |---|---|
-| `--tag TAG` | Filter to notes that have this tag. Repeatable. |
-| `--property k=v` | Filter to notes where frontmatter key `k` equals value `v`. Repeatable. |
+| `--tag TAG` | Filter to notes that have this tag. Repeatable; comma-separated values accepted. |
+| `--property k=v` | Filter to notes where frontmatter key `k` equals value `v`. Repeatable. Also accepts two tokens: `--property k v`. |
 | `--limit N` | Maximum number of results to return. |
 | `--vault NAME` | Search within the named vault. |
 | `--vault-path PATH` | Search within the vault at this path. |
@@ -52,6 +52,9 @@ pumex search --tag work
 
 # Combine query with filters
 pumex search project --tag work --property status=active
+
+# --property also accepts two separate tokens
+pumex search project --property status active
 
 # Search across all vaults
 pumex search kubernetes --all

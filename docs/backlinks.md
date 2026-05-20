@@ -55,4 +55,4 @@ pumex backlinks architecture --all
 ## See also
 
 - [`pumex search`](search.md) — full-text search
-- [`pumex note read`](note.md#read) — read a note's content
+- [`pumex read`](note.md#read) — read a note's content

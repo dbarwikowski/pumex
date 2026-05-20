@@ -11,17 +11,15 @@ Pumex is a headless knowledge engine for plain Markdown vaults. All commands com
 | [`pumex search`](search.md) | Full-text + tag/property search |
 | [`pumex tags`](tags.md) | List tags and their counts |
 | [`pumex backlinks`](backlinks.md) | List notes that link to a given note |
-| [`pumex vaults`](vaults.md) | List registered vaults |
+| [`pumex vault list`](vault.md#list) | List registered vaults |
 | [`pumex vault add`](vault.md#add) | Register an existing directory as a vault |
 | [`pumex vault remove`](vault.md#remove) | Unregister a vault (files untouched) |
-| [`pumex note read`](note.md#read) | Read a note, rendered or raw |
-| [`pumex note create`](note.md#create) | Create a new note |
-| [`pumex note append`](note.md#append) | Append content to an existing note |
-| [`pumex note delete`](note.md#delete) | Delete a note |
-| [`pumex note list`](note.md#list) | List all notes in a vault |
-| [`pumex property list`](property.md#list) | List frontmatter properties of a note |
-| [`pumex property get`](property.md#get) | Get a single property value |
-| [`pumex property set`](property.md#set) | Set a property value |
+| [`pumex read`](note.md#read) | Read a note, rendered or raw |
+| [`pumex create`](note.md#create) | Create a new note |
+| [`pumex append`](note.md#append) | Append content to an existing note |
+| [`pumex delete`](note.md#delete) | Delete a note |
+| [`pumex list`](note.md#list) | List all notes in a vault |
+| [`pumex prop`](property.md) | List, get, or set frontmatter properties |
 | [`pumex daily`](daily.md) | Read today's daily note |
 | [`pumex daily append`](daily.md#append) | Append to a daily note |
 | [`pumex daemon status`](daemon.md#status) | Check daemon status |
