@@ -49,7 +49,7 @@ public static class Commands
             }, connectTimeoutMs: 1500);
 
             if (resp.Success)
-                AnsiConsole.MarkupLine("[green]registered[/] with daemon");
+                AnsiConsole.MarkupLine($"[green]registered[/] vault [bold]{name.EscapeMarkup()}[/] with daemon");
             else
                 AnsiConsole.MarkupLine($"[yellow]daemon refused registration:[/] {resp.Error?.EscapeMarkup()}");
         }

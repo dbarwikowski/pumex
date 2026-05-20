@@ -89,6 +89,18 @@ public class IpcRequestExtensionsTests
     }
 
     [Fact]
+    public async Task ResolveNotePathAsync_appends_md_when_path_has_separator_but_no_extension()
+    {
+        using var fixture = new IndexDbFixture();
+        var vault = new VaultRecord(Id: 1, Name: "v", Path: OperatingSystem.IsWindows() ? @"C:\vault" : "/vault");
+
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("wiki/index", vault, fixture.Db);
+
+        var expected = Path.GetFullPath(Path.Combine(vault.Path, "wiki/index.md"));
+        Assert.Equal(expected, resolved);
+    }
+
+    [Fact]
     public async Task ResolveNotePathAsync_joins_relative_against_vault_root_when_vault_in_scope()
     {
         using var fixture = new IndexDbFixture();

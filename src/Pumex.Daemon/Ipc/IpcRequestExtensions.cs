@@ -49,9 +49,12 @@ internal static class IpcRequestExtensions
         var hasSeparator = rawPath.Contains('/') || rawPath.Contains('\\');
         if (hasSeparator)
         {
+            var withExt = rawPath.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
+                ? rawPath
+                : rawPath + ".md";
             return vault is not null
-                ? Path.GetFullPath(Path.Combine(vault.Path, rawPath))
-                : Path.GetFullPath(rawPath);
+                ? Path.GetFullPath(Path.Combine(vault.Path, withExt))
+                : Path.GetFullPath(withExt);
         }
 
         // Bare name — needs vault context to look up via the index.
