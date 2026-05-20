@@ -11,9 +11,6 @@ $Repo    = if ($env:PUMEX_REPO)    { $env:PUMEX_REPO }    else { 'dbarwikowski/p
 $Version = if ($env:PUMEX_VERSION) { $env:PUMEX_VERSION } else { 'latest' }
 $BinDir  = if ($env:PUMEX_BIN_DIR) { $env:PUMEX_BIN_DIR } else { Join-Path $HOME '.pumex\bin' }
 
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
-    [Security.Principal.WindowsBuiltInRole]::Administrator)
-
 # ---- Detect arch ----
 $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
     'AMD64' { 'x64' }
@@ -30,23 +27,22 @@ $url = if ($Version -eq 'latest') {
 }
 
 # ---- Stop daemon before replacing locked binaries ----
-$service = Get-Service -Name 'pumex' -ErrorAction SilentlyContinue
-$serviceWasRunning = $service -and $service.Status -ne 'Stopped'
-if ($serviceWasRunning) {
-    if (-not $isAdmin) {
-        Write-Host "error: the pumex service is running and the binaries are locked."
-        Write-Host "Re-run this script from an elevated (Administrator) shell to update."
-        exit 1
+$pumexExe = Join-Path $BinDir 'pumex.exe'
+$daemonWasRunning = $false
+if (Test-Path $pumexExe) {
+    & $pumexExe daemon status 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        $daemonWasRunning = $true
+        Write-Host "Stopping pumex-daemon..."
+        & $pumexExe daemon stop | Out-Null
     }
-    Write-Host "Stopping pumex service..."
-    Stop-Service -Name 'pumex' -Force
 }
 
-# Kill any remaining process — handles foreground runs and the brief window
-# after Stop-Service returns before the OS releases the file handle.
+# Defensive: kill any remaining process (e.g. orphaned foreground daemon)
+# so the binary isn't locked when we extract over it.
 $proc = Get-Process -Name 'pumex-daemon' -ErrorAction SilentlyContinue
 if ($proc) {
-    Write-Host "Waiting for pumex-daemon to exit..."
+    Write-Host "Force-stopping leftover pumex-daemon..."
     $proc | Stop-Process -Force -ErrorAction SilentlyContinue
     $proc | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
 }
@@ -68,12 +64,6 @@ finally {
 
 Write-Host "Installed to $BinDir"
 
-# ---- Restart service if it was running ----
-if ($serviceWasRunning) {
-    Write-Host "Restarting pumex service..."
-    Start-Service -Name 'pumex'
-}
-
 # ---- Add to PATH (user, permanent) ----
 $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User') ?? ''
 $entries  = $userPath -split ';' | Where-Object { $_ -ne '' }
@@ -85,12 +75,13 @@ if ($BinDir -notin $entries) {
 }
 $env:PATH = "$BinDir;$env:PATH"
 
-# ---- Install daemon service if running as admin and not already installed ----
-if ($isAdmin -and -not $service) {
-    Write-Host "Installing pumex-daemon as a scheduled task..."
+# ---- Install or restart the daemon ----
+# Scheduled task is per-user and runs LeastPrivilege — no admin required.
+$taskExists = $null -ne (Get-ScheduledTask -TaskName 'Pumex Daemon' -ErrorAction SilentlyContinue)
+if (-not $taskExists) {
+    Write-Host "Registering pumex-daemon as a per-user scheduled task..."
     & "$BinDir\pumex.exe" daemon install
-} elseif (-not $isAdmin -and -not $service) {
-    Write-Host ""
-    Write-Host "To install the daemon as a scheduled task, run in an elevated shell:"
-    Write-Host "  pumex daemon install"
+} elseif ($daemonWasRunning) {
+    Write-Host "Starting refreshed daemon..."
+    & "$BinDir\pumex.exe" daemon start
 }

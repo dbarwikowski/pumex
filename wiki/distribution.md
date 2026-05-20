@@ -2,17 +2,16 @@
 
 ## Binaries
 
-Each GitHub release ships three self-contained single-file binaries for every
+Each GitHub release ships two self-contained single-file binaries for every
 supported platform (`win-x64`, `linux-x64`, `linux-arm64`, `osx-x64`,
 `osx-arm64`):
 
 | Binary | Purpose |
 |--------|---------|
-| `pumex` / `pumex.exe` | CLI — interactive terminal use |
+| `pumex` / `pumex.exe` | CLI — interactive terminal use, IPC client |
 | `pumex-daemon` / `pumex-daemon.exe` | Background indexing service |
-| `pumex-mcp` / `pumex-mcp.exe` | MCP server — wires Pumex into AI clients |
 
-The install scripts place all three under `~/.pumex/bin/` and add that
+The install scripts place both under `~/.pumex/bin/` and add that
 directory to `PATH`.
 
 ## Install
@@ -30,55 +29,36 @@ curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/i
 Pin a specific version with `$env:PUMEX_VERSION = 'v0.2.0'` (PowerShell) or
 `PUMEX_VERSION=v0.2.0` (sh) before running.
 
-## MCP server (`pumex-mcp`)
+## Daemon registration
 
-`pumex-mcp` implements the [Model Context Protocol](https://modelcontextprotocol.io/)
-over **stdio**. MCP clients launch it as a subprocess — there is no port or
-URL to configure. The binary delegates all operations to the running
-`pumex-daemon`; if the daemon is not running, tools return errors. Start the
-daemon separately with `pumex daemon install` (registers as a system service)
-or run `pumex-daemon` directly in a terminal.
+The installer registers `pumex-daemon` to auto-start at logon:
 
-### Claude Desktop
+- **Windows** — a per-user scheduled task (`Pumex Daemon`) running at
+  `LeastPrivilege`. No admin shell required.
+- **Linux** — a systemd user service (`pumex.service`).
+- **macOS** — a launchd user agent (`com.pumex.daemon`).
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
-or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+Ad-hoc lifecycle is also available without touching the service registration:
 
-```json
-{
-  "mcpServers": {
-    "pumex": {
-      "command": "pumex-mcp",
-      "args": []
-    }
-  }
-}
+```sh
+pumex daemon start    # spawn a detached daemon for this session
+pumex daemon stop     # graceful shutdown via IPC
+pumex daemon status   # is it running?
 ```
 
-Restart Claude Desktop after saving. The Pumex tools will appear in the
-tool picker once the daemon is running.
+See [`pumex daemon`](../docs/daemon.md) for details.
 
-### Cursor
+## Data directory
 
-Open **Cursor Settings → MCP** and add a new server:
+Everything daemon-owned lives under `$PUMEX_HOME` (default `~/.pumex/`):
 
-```json
-{
-  "pumex": {
-    "command": "pumex-mcp",
-    "args": []
-  }
-}
-```
+| Path | Contents |
+|------|----------|
+| `~/.pumex/bin/` | CLI and daemon binaries |
+| `~/.pumex/index.db` | SQLite + FTS5 index |
+| `~/.pumex/logs/` | Daily-rolled daemon logs, last 7 days kept |
+| `~/.pumex/config.json` | Global config |
 
-Or edit `.cursor/mcp.json` directly in your project root for a per-project
-configuration.
-
-### Troubleshooting
-
-- Run `pumex ping` to verify the daemon is reachable.
-- If `pumex-mcp` is not on `PATH`, use the full path:
-  `~/.pumex/bin/pumex-mcp` (Linux/macOS) or
-  `$HOME\.pumex\bin\pumex-mcp.exe` (Windows).
-- `PUMEX_HOME` is respected by `pumex-mcp` — set it to point at a dev
-  daemon the same way you would for the CLI.
+Set `PUMEX_HOME` to an alternate path to run a dev daemon alongside an
+installed one — the named pipe is derived from the home path so they don't
+collide.

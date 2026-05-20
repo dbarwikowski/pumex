@@ -16,21 +16,28 @@ if ($env:PUMEX_PURGE -eq '1') { $Purge = $true }
 $BinDir  = if ($env:PUMEX_BIN_DIR) { $env:PUMEX_BIN_DIR } else { Join-Path $HOME '.pumex\bin' }
 $DataDir = Join-Path $HOME '.pumex'
 
-# ---- 1. Windows service ----
-$svcName = 'pumex'
-if (Get-Service -Name $svcName -ErrorAction SilentlyContinue) {
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
-        [Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (-not $isAdmin) {
-        Write-Warning "Service '$svcName' is still registered. Re-run from an elevated shell to remove it, or run: pumex daemon uninstall"
-    } else {
-        Write-Host "Stopping service '$svcName'..."
-        sc.exe stop $svcName 2>&1 | Out-Null
-        # Give the SCM a moment; sc delete marks it for deletion if still stopping.
-        Start-Sleep -Seconds 2
-        sc.exe delete $svcName | Out-Null
-        Write-Host "  Service removed."
+# ---- 1. Stop daemon and remove scheduled task ----
+# The daemon registers as a per-user scheduled task ("Pumex Daemon") — no admin required.
+$pumexExe = Join-Path $BinDir 'pumex.exe'
+if (Test-Path $pumexExe) {
+    Write-Host "Stopping pumex-daemon..."
+    & $pumexExe daemon stop 2>&1 | Out-Null
+    Write-Host "Removing scheduled task..."
+    & $pumexExe daemon uninstall 2>&1 | Out-Null
+} else {
+    # Binary already gone — fall back to schtasks directly so the task doesn't linger.
+    if (Get-ScheduledTask -TaskName 'Pumex Daemon' -ErrorAction SilentlyContinue) {
+        schtasks /end /tn 'Pumex Daemon' 2>&1 | Out-Null
+        schtasks /delete /tn 'Pumex Daemon' /f 2>&1 | Out-Null
+        Write-Host "  Scheduled task 'Pumex Daemon' removed."
     }
+}
+
+# Defensive: kill any leftover daemon process so the binary isn't locked.
+$proc = Get-Process -Name 'pumex-daemon' -ErrorAction SilentlyContinue
+if ($proc) {
+    $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+    $proc | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
 }
 
 # ---- 2. Binaries ----

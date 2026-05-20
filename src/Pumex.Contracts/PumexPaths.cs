@@ -21,6 +21,7 @@ public static class PumexPaths
     public static string IndexDb => Path.Combine(Root, "index.db");
     public static string GlobalConfig => Path.Combine(Root, "config.json");
     public static string Plugins => Path.Combine(Root, "plugins");
+    public static string LogsDir => Path.Combine(Root, "logs");
 
     public static void EnsureRoot() => Directory.CreateDirectory(Root);
 
