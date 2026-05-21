@@ -52,68 +52,70 @@ iwr https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/uninstal
 
 The scripts stop and remove the daemon service, delete the binaries from `~/.pumex/bin/`, and leave the data directory (`~/.pumex/`) untouched unless you opt into purge. Vault markers (`.pumex/` directories inside your note folders) are never touched.
 
-## 30-second demo
+## Quick start
 
 ```sh
-mkdir -p ~/notes && cd ~/notes
-pumex new mynotes .                        # creates .pumex/ marker, registers with the daemon
+# Install and start the daemon
+pumex daemon install
 
-cat > welcome.md <<'EOF'
----
-tags: [intro, demo]
----
-# Welcome
-First note. See [[ideas]] for what's next.
-EOF
+# Create a vault
+pumex new work ~/notes/work
 
-cat > ideas.md <<'EOF'
-# Ideas
-Things to explore.
-EOF
+# Write a note
+pumex create standup --content "## 2026-05-20\n- shipped v1.2"
 
-pumex search Welcome                       # FTS5 search over the vault
-pumex tags                                 # tag aggregation (auto-scoped to current vault)
-pumex backlinks ideas.md                   # finds welcome.md (the wikilink resolved)
-pumex read welcome.md                      # frontmatter + body, structured
+# Search it
+pumex search standup
+
+# Read it back
+pumex read standup
 ```
-
-Every read command auto-discovers the vault you're in by walking up from the current directory until it finds a `.pumex/` marker. Override with `--vault NAME`, `--vault-path PATH`, or `--all` for cross-vault queries.
 
 ## Commands
 
-| Command | Purpose |
+| Command | Description |
 |---|---|
 | `pumex --version` | Print CLI and daemon versions |
 | `pumex ping` | Daemon health check |
 | `pumex new <name> [path]` | Create a vault marker + register with the daemon |
-| `pumex search <query> [--limit N]` | FTS5 search |
-| `pumex tags` | Tag aggregation, vault-scoped by default |
-| `pumex backlinks <path>` | Notes that link to the given note |
-| `pumex vault list` / `pumex vault add <name> <path>` | List / register vaults |
-| `pumex read <path> [--raw]` | Read note (parsed frontmatter + body, or raw) |
-| `pumex create <path> [--content TEXT]` | Write a new note (pipe stdin when `--content` is omitted) |
-| `pumex append <path> [--content TEXT] [--inline]` | Append to an existing note |
-| `pumex delete <path>` | Delete a note |
+| `pumex search [query] [--tag TAG]... [--property k=v]...` | FTS5 full-text search with optional tag and property filters |
+| `pumex tags` | Tag aggregation with counts, vault-scoped by default |
+| `pumex backlinks <path-or-name>` | Notes that link to the given note via `[[wikilink]]` |
+| `pumex vault list` | List registered vaults |
+| `pumex vault add <name> <path>` | Register an existing directory as a vault |
+| `pumex vault remove <name>` | Unregister a vault (files untouched) |
+| `pumex read <note> [--raw]` | Display a note — parsed frontmatter + rendered body, or raw |
+| `pumex create <note> [--content TEXT]` | Create a note (pipe stdin when `--content` is omitted) |
+| `pumex append <note> [--content TEXT] [--inline]` | Append to an existing note |
+| `pumex delete <note>` | Delete a note |
 | `pumex list` | List all notes in the vault |
-| `pumex prop <path>` | List all frontmatter properties on a note |
-| `pumex prop <path> <key>` | Read a single frontmatter property |
-| `pumex prop <path> <key> <value>` | Write a frontmatter property |
+| `pumex prop <note> [key [value]]` | List, get, or set frontmatter properties |
 | `pumex daily [--date YYYY-MM-DD]` | Read today's (or a given) daily note |
-| `pumex daily append [--content TEXT] [--date YYYY-MM-DD]` | Append to a daily note |
-| `pumex vault remove <name>` | Unregister a vault |
+| `pumex daily append [--content TEXT]` | Append to a daily note |
 | `pumex daemon <status\|start\|stop\|restart\|install\|uninstall>` | Manage the daemon: ad-hoc start/stop or register as a user-level service |
 
-All commands accept `--vault NAME`, `--vault-path PATH`, or `--all` to override auto-discovery.
+Full reference: [`docs/`](docs/index.md).
+
+### Vault scope
+
+Most commands accept these flags to control which vault is targeted:
+
+| Flag | Description |
+|---|---|
+| `--vault NAME` | Select vault by registered name |
+| `--vault-path PATH` | Select vault by directory path |
+| `--all` | Run across all registered vaults |
+
+When no scope flag is given, the vault is auto-discovered by walking up from the current working directory until a `.pumex/` marker directory is found.
 
 ## How it works
 
 ```
-Disk → NoteParser → IndexDb (SQLite + FTS5) → CLI / agent
-        ↑              ↑
-        FileSystemWatcher (debounced)
-        VaultIndexingOrchestrator (one IndexingService per vault)
-
-CLI ⇄ NamedPipe IPC ⇄ Command handlers ⇄ IndexDb
+pumex (CLI)  ──named pipe──►  pumex-daemon (background)
+                                    │
+                               SQLite FTS5 index
+                                    │
+                              Markdown vault(s)
 ```
 
 The daemon (`pumex-daemon`) owns the index and keeps it warm via per-vault `IndexingService` instances driven by a `FileSystemWatcher`. The CLI (`pumex`) is a thin client that speaks length-prefixed JSON over a named pipe — the same mechanism is the integration point for AI agents and other external tooling.
@@ -162,7 +164,7 @@ Set `PUMEX_HOME` to an isolated directory. This changes both the pipe name and t
 # Linux / macOS
 export PUMEX_HOME="$HOME/.pumex-dev"
 dotnet run --project src/Pumex.Daemon       # dev daemon — own pipe, own index.db
-pumex search foo                        # CLI picks up PUMEX_HOME automatically
+pumex search foo                            # CLI picks up PUMEX_HOME automatically
 ```
 
 ```powershell
