@@ -83,6 +83,7 @@ Every read command auto-discovers the vault you're in by walking up from the cur
 
 | Command | Purpose |
 |---|---|
+| `pumex --version` | Print CLI and daemon versions |
 | `pumex ping` | Daemon health check |
 | `pumex new <name> [path]` | Create a vault marker + register with the daemon |
 | `pumex search <query> [--limit N]` | FTS5 search |
