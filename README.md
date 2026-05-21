@@ -174,6 +174,12 @@ pumex search foo
 
 The production daemon (installed service, no env var) is untouched. The dev index is a rebuildable cache — delete `~/.pumex-dev/index.db` and restart any time.
 
+### Releasing
+
+Every push to `master` produces a tagged release. CI computes the next patch number from existing `vX.Y.*` tags and embeds it into the binaries via `dotnet publish -p:Version=...` — no manual tag pushes, no source-file bump.
+
+`Directory.Build.props` carries only the major and minor in `X.Y.0-dev` form (e.g. `<Version>0.1.0-dev</Version>`). To bump the minor or major, edit that file on `master`, commit, push — the next CI run sees no `vX.Y.*` tag for the new minor and produces `vX.Y.0`. Local `dotnet build` produces `X.Y.0-dev` binaries, so `pumex --version` makes dev builds easy to spot.
+
 PRs welcome.
 
 ## License
