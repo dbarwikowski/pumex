@@ -331,7 +331,19 @@ var root = new RootCommand("pumex — headless markdown vault");
     }
     {
         var daemonPathOpt = new Option<string?>("--daemon-path") { Description = "Path to the daemon binary" };
-        var cmd = new Command("restart", "Restart the daemon");
+        var cmd = new Command("start", "Start the daemon (spawn detached, idempotent)");
+        cmd.Add(daemonPathOpt);
+        cmd.SetAction(async r => await Commands.DaemonStartAsync(r.GetValue(daemonPathOpt)));
+        daemonCmd.Add(cmd);
+    }
+    {
+        var cmd = new Command("stop", "Stop the daemon gracefully via IPC");
+        cmd.SetAction(async _ => await Commands.DaemonStopAsync());
+        daemonCmd.Add(cmd);
+    }
+    {
+        var daemonPathOpt = new Option<string?>("--daemon-path") { Description = "Path to the daemon binary" };
+        var cmd = new Command("restart", "Restart the daemon (stop + start)");
         cmd.Add(daemonPathOpt);
         cmd.SetAction(async r => await Commands.DaemonRestartAsync(r.GetValue(daemonPathOpt)));
         daemonCmd.Add(cmd);

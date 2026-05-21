@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Security;
+using System.Text;
+using Pumex.Contracts;
 using Spectre.Console;
 
 namespace Pumex.Cli;
@@ -35,11 +38,6 @@ public class DaemonInstaller
         OperatingSystem.IsWindows() ? UninstallWindowsAsync()
         : OperatingSystem.IsMacOS() ? UninstallMacAsync()
         : UninstallLinuxAsync();
-
-    public Task<int> RestartAsync() =>
-        OperatingSystem.IsWindows() ? RestartWindowsAsync()
-        : OperatingSystem.IsMacOS() ? RestartMacAsync()
-        : RestartLinuxAsync();
 
     // -------------------- Linux (systemd --user) --------------------
 
@@ -84,23 +82,32 @@ public class DaemonInstaller
         return 0;
     }
 
-    private async Task<int> RestartLinuxAsync()
-    {
-        var rc = await Run("systemctl", "--user", "restart", ServiceName);
-        if (rc == 0) AnsiConsole.MarkupLine("[green]restarted[/]");
-        return rc;
-    }
-
     // -------------------- Windows (schtasks) --------------------
 
+    // XML form gives us explicit principal (LeastPrivilege, no admin) and a working
+    // directory under $HOME/.pumex — schtasks /create with /tr alone has neither.
     private async Task<int> InstallWindowsAsync()
     {
-        if (await Run("schtasks", "/create", "/tn", WindowsTaskName, "/tr", $"\"{_daemonPath}\"", "/sc", "ONLOGON", "/f") != 0) return 1;
-        if (await Run("schtasks", "/run", "/tn", WindowsTaskName) != 0)
-            AnsiConsole.MarkupLine("[yellow]warning:[/] task created but failed to start. Try [bold]pumex daemon restart[/].");
+        var xml = BuildWindowsTaskXml(_daemonPath, PumexPaths.Root);
+        var xmlPath = Path.Combine(Path.GetTempPath(), $"pumex-task-{Guid.NewGuid():N}.xml");
+        try
+        {
+            // schtasks expects UTF-16 with BOM.
+            await File.WriteAllTextAsync(xmlPath, xml, Encoding.Unicode);
 
-        AnsiConsole.MarkupLine($"[green]installed[/] scheduled task [bold]{WindowsTaskName}[/]");
-        return 0;
+            if (await Run("schtasks", "/create", "/tn", WindowsTaskName, "/xml", xmlPath, "/f") != 0)
+                return 1;
+
+            if (await Run("schtasks", "/run", "/tn", WindowsTaskName) != 0)
+                AnsiConsole.MarkupLine("[yellow]warning:[/] task created but failed to start now. Try [bold]pumex daemon start[/].");
+
+            AnsiConsole.MarkupLine($"[green]installed[/] scheduled task [bold]{WindowsTaskName}[/]");
+            return 0;
+        }
+        finally
+        {
+            try { File.Delete(xmlPath); } catch { /* best effort */ }
+        }
     }
 
     private async Task<int> UninstallWindowsAsync()
@@ -111,12 +118,47 @@ public class DaemonInstaller
         return 0;
     }
 
-    private async Task<int> RestartWindowsAsync()
+    internal static string BuildWindowsTaskXml(string daemonPath, string workingDir)
     {
-        await Run("schtasks", "/end", "/tn", WindowsTaskName);
-        var rc = await Run("schtasks", "/run", "/tn", WindowsTaskName);
-        if (rc == 0) AnsiConsole.MarkupLine("[green]restarted[/]");
-        return rc;
+        var userId = $@"{Environment.UserDomainName}\{Environment.UserName}";
+        var cmd = SecurityElement.Escape(daemonPath);
+        var wd = SecurityElement.Escape(workingDir);
+        var uid = SecurityElement.Escape(userId);
+        return $"""
+            <?xml version="1.0" encoding="UTF-16"?>
+            <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+              <RegistrationInfo>
+                <Description>Pumex knowledge engine daemon</Description>
+              </RegistrationInfo>
+              <Triggers>
+                <LogonTrigger>
+                  <Enabled>true</Enabled>
+                  <UserId>{uid}</UserId>
+                </LogonTrigger>
+              </Triggers>
+              <Principals>
+                <Principal id="Author">
+                  <UserId>{uid}</UserId>
+                  <LogonType>InteractiveToken</LogonType>
+                  <RunLevel>LeastPrivilege</RunLevel>
+                </Principal>
+              </Principals>
+              <Settings>
+                <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+                <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+                <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+                <StartWhenAvailable>true</StartWhenAvailable>
+                <AllowHardTerminate>true</AllowHardTerminate>
+                <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+              </Settings>
+              <Actions Context="Author">
+                <Exec>
+                  <Command>{cmd}</Command>
+                  <WorkingDirectory>{wd}</WorkingDirectory>
+                </Exec>
+              </Actions>
+            </Task>
+            """;
     }
 
     // -------------------- macOS (launchd) --------------------
@@ -166,14 +208,6 @@ public class DaemonInstaller
         return 0;
     }
 
-    private async Task<int> RestartMacAsync()
-    {
-        await Run("launchctl", "unload", MacPlistPath);
-        var rc = await Run("launchctl", "load", MacPlistPath);
-        if (rc == 0) AnsiConsole.MarkupLine("[green]restarted[/]");
-        return rc;
-    }
-
     // -------------------- helpers --------------------
 
     private static async Task<int> Run(string file, params string[] args)
@@ -188,13 +222,20 @@ public class DaemonInstaller
         foreach (var a in args) psi.ArgumentList.Add(a);
 
         using var proc = Process.Start(psi)!;
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
         await proc.WaitForExitAsync();
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
 
         if (proc.ExitCode != 0)
         {
-            var stderr = await proc.StandardError.ReadToEndAsync();
-            if (!string.IsNullOrWhiteSpace(stderr))
-                AnsiConsole.MarkupLine($"[dim]{file} {string.Join(' ', args).EscapeMarkup()}: {stderr.Trim().EscapeMarkup()}[/]");
+            var msg = (stderr + stdout).Trim();
+            var argv = string.Join(' ', args).EscapeMarkup();
+            if (msg.Length > 0)
+                AnsiConsole.MarkupLine($"[red]{file} {argv} (exit {proc.ExitCode}):[/]\n{msg.EscapeMarkup()}");
+            else
+                AnsiConsole.MarkupLine($"[red]{file} {argv} failed with exit {proc.ExitCode}[/]");
         }
         return proc.ExitCode;
     }

@@ -23,9 +23,11 @@ Pumex is a headless knowledge engine for plain Markdown vaults. All commands com
 | [`pumex daily`](daily.md) | Read today's daily note |
 | [`pumex daily append`](daily.md#append) | Append to a daily note |
 | [`pumex daemon status`](daemon.md#status) | Check daemon status |
-| [`pumex daemon install`](daemon.md#install) | Install daemon as a system service |
-| [`pumex daemon uninstall`](daemon.md#uninstall) | Uninstall the system service |
-| [`pumex daemon restart`](daemon.md#restart) | Restart the system service |
+| [`pumex daemon start`](daemon.md#start) | Spawn the daemon as a detached process |
+| [`pumex daemon stop`](daemon.md#stop) | Gracefully stop the daemon via IPC |
+| [`pumex daemon restart`](daemon.md#restart) | Stop then start the daemon |
+| [`pumex daemon install`](daemon.md#install) | Register daemon to auto-start at logon |
+| [`pumex daemon uninstall`](daemon.md#uninstall) | Remove the auto-start registration |
 
 ## Vault scope flags
 

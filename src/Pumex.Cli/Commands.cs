@@ -392,8 +392,14 @@ public static class Commands
     public static Task<int> DaemonUninstallAsync(string? daemonPath) =>
         RunInstaller(daemonPath, i => i.UninstallAsync());
 
+    public static Task<int> DaemonStartAsync(string? daemonPath) =>
+        DaemonLifecycle.StartAsync(new IpcClient(), daemonPath);
+
+    public static Task<int> DaemonStopAsync() =>
+        DaemonLifecycle.StopAsync(new IpcClient());
+
     public static Task<int> DaemonRestartAsync(string? daemonPath) =>
-        RunInstaller(daemonPath, i => i.RestartAsync());
+        DaemonLifecycle.RestartAsync(new IpcClient(), daemonPath);
 
     private static Task<int> RunInstaller(string? daemonPath, Func<DaemonInstaller, Task<int>> action)
     {

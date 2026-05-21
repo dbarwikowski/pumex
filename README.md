@@ -29,7 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/i
 
 ```powershell
 iwr https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/install.ps1 | iex
-# PATH is updated automatically. To install the daemon as a scheduled task, run the above in an elevated shell.
+# PATH is updated automatically. The daemon is registered as a per-user scheduled task — no admin shell required.
 ```
 
 The installer downloads the right binary for your OS + arch from the latest GitHub Release and drops it into `~/.pumex/bin/`. Pin a version with `PUMEX_VERSION=v0.2.0` (or `$env:PUMEX_VERSION` on Windows).
@@ -43,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/u
 # Add PUMEX_PURGE=1 to also delete ~/.pumex/ (index, config).
 ```
 
-**Windows (PowerShell, elevated for service removal):**
+**Windows (PowerShell):**
 
 ```powershell
 iwr https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/uninstall.ps1 | iex
@@ -100,7 +100,7 @@ Every read command auto-discovers the vault you're in by walking up from the cur
 | `pumex daily [--date YYYY-MM-DD]` | Read today's (or a given) daily note |
 | `pumex daily append [--content TEXT] [--date YYYY-MM-DD]` | Append to a daily note |
 | `pumex vault remove <name>` | Unregister a vault |
-| `pumex daemon <status\|install\|uninstall\|restart>` | Manage the platform-native daemon service |
+| `pumex daemon <status\|start\|stop\|restart\|install\|uninstall>` | Manage the daemon: ad-hoc start/stop or register as a user-level service |
 
 All commands accept `--vault NAME`, `--vault-path PATH`, or `--all` to override auto-discovery.
 
