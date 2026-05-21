@@ -1,9 +1,18 @@
 using System.CommandLine;
 using Pumex.Cli;
+using Pumex.Contracts;
 using Pumex.Ipc;
 using Spectre.Console;
 
 var root = new RootCommand("pumex — headless markdown vault");
+
+// Replace System.CommandLine's default `--version` action so the flag reports both
+// the CLI and the running daemon's version.
+{
+    var versionOpt = root.Options.OfType<System.CommandLine.VersionOption>().FirstOrDefault();
+    if (versionOpt is not null)
+        versionOpt.Action = new VersionOptionAction();
+}
 
 // ping
 {

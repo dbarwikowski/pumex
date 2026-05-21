@@ -42,6 +42,7 @@ try
             s.AddHostedService(sp => sp.GetRequiredService<VaultIndexingOrchestrator>());
 
             s.AddSingleton<ICommandHandler, PingHandler>();
+            s.AddSingleton<ICommandHandler>(_ => new VersionHandler(VersionInfo.Current));
             s.AddSingleton<ICommandHandler, StopHandler>();
             s.AddSingleton<ICommandHandler, SearchHandler>();
             s.AddSingleton<ICommandHandler, TagsHandler>();
