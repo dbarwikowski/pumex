@@ -6,18 +6,16 @@ namespace Pumex.Daemon.Tests;
 public class PropertyHandlersTests : IDisposable
 {
     private readonly TempVault _vault = new();
-    private readonly string _dbPath;
-    private readonly IndexDb _db;
+    private readonly TestDbFixture _fx;
 
     public PropertyHandlersTests()
     {
-        _dbPath = Path.Combine(_vault.Path, "index.db");
-        _db = new IndexDb(_dbPath);
+        _fx = new TestDbFixture();
     }
 
     public void Dispose()
     {
-        _db.Dispose();
+        _fx.Dispose();
         _vault.Dispose();
     }
 
@@ -28,7 +26,7 @@ public class PropertyHandlersTests : IDisposable
     public async Task PropertySet_adds_frontmatter_when_note_has_none()
     {
         var path = _vault.WriteNote("plain.md", "# Plain\n\nbody only\n");
-        var handler = new PropertySetHandler(_db, new NoteParser());
+        var handler = new PropertySetHandler(_fx.Vaults, _fx.Notes, _fx.InlineIndex, new NoteParser());
 
         await handler.HandleAsync(Req("property:set",
             ("path", path), ("key", "status"), ("value", "draft")), CancellationToken.None);
@@ -44,7 +42,7 @@ public class PropertyHandlersTests : IDisposable
     public async Task PropertySet_updates_existing_key_in_place()
     {
         var path = _vault.WriteNote("note.md", "---\nstatus: draft\ntitle: Hello\n---\n\nbody\n");
-        var handler = new PropertySetHandler(_db, new NoteParser());
+        var handler = new PropertySetHandler(_fx.Vaults, _fx.Notes, _fx.InlineIndex, new NoteParser());
 
         await handler.HandleAsync(Req("property:set",
             ("path", path), ("key", "status"), ("value", "published")), CancellationToken.None);
@@ -60,7 +58,7 @@ public class PropertyHandlersTests : IDisposable
     public async Task PropertySet_adds_new_key_to_existing_frontmatter()
     {
         var path = _vault.WriteNote("note.md", "---\ntitle: Hello\n---\n\nbody\n");
-        var handler = new PropertySetHandler(_db, new NoteParser());
+        var handler = new PropertySetHandler(_fx.Vaults, _fx.Notes, _fx.InlineIndex, new NoteParser());
 
         await handler.HandleAsync(Req("property:set",
             ("path", path), ("key", "priority"), ("value", "high")), CancellationToken.None);
@@ -73,7 +71,7 @@ public class PropertyHandlersTests : IDisposable
     [Fact]
     public async Task PropertySet_throws_on_missing_file()
     {
-        var handler = new PropertySetHandler(_db, new NoteParser());
+        var handler = new PropertySetHandler(_fx.Vaults, _fx.Notes, _fx.InlineIndex, new NoteParser());
         var ghostPath = Path.Combine(_vault.Path, "ghost.md");
 
         await Assert.ThrowsAsync<FileNotFoundException>(async () => await handler.HandleAsync(
@@ -84,14 +82,14 @@ public class PropertyHandlersTests : IDisposable
     [Fact]
     public async Task PropertyList_returns_frontmatter_after_indexing()
     {
-        var vaultId = await _db.AddVaultAsync("v", _vault.Path);
+        var vaultId = await _fx.Vaults.AddVaultAsync("v", _vault.Path);
         var path = _vault.WriteNote("n.md", "---\ntitle: Hi\nstatus: live\n---\n\nbody\n");
 
         // Simulate the indexer having seen this note.
         var doc = new NoteParser().Parse(path);
-        await _db.UpsertNotesAsync(vaultId, [doc]);
+        await _fx.UpsertAsync(vaultId, [doc]);
 
-        var handler = new PropertyListHandler(_db);
+        var handler = new PropertyListHandler(_fx.Vaults, _fx.Notes);
         var result = (List<PropertyEntry>)(await handler.HandleAsync(
             Req("property:list", ("path", path)), CancellationToken.None))!;
 
@@ -103,12 +101,12 @@ public class PropertyHandlersTests : IDisposable
     [Fact]
     public async Task PropertyGet_throws_when_key_is_absent()
     {
-        var vaultId = await _db.AddVaultAsync("v", _vault.Path);
+        var vaultId = await _fx.Vaults.AddVaultAsync("v", _vault.Path);
         var path = _vault.WriteNote("n.md", "---\ntitle: Hi\n---\n\nbody\n");
         var doc = new NoteParser().Parse(path);
-        await _db.UpsertNotesAsync(vaultId, [doc]);
+        await _fx.UpsertAsync(vaultId, [doc]);
 
-        var handler = new PropertyGetHandler(_db);
+        var handler = new PropertyGetHandler(_fx.Vaults, _fx.Notes);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(async () => await handler.HandleAsync(
             Req("property:get", ("path", path), ("key", "missing")),

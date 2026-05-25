@@ -6,21 +6,21 @@ namespace Pumex.Daemon.Tests;
 public class DailyHandlersTests : IDisposable
 {
     private readonly TempVault _vault = new();
-    private readonly IndexDb _db;
+    private readonly TestDbFixture _fx;
     private readonly NoteParser _parser = new();
     private readonly long _vaultId;
     private readonly VaultRecord _vaultRecord;
 
     public DailyHandlersTests()
     {
-        _db = new IndexDb(Path.Combine(_vault.Path, "index.db"));
-        _vaultId = _db.AddVaultAsync("test", _vault.Path).GetAwaiter().GetResult();
-        _vaultRecord = _db.GetVaultByPathAsync(_vault.Path).GetAwaiter().GetResult()!;
+        _fx = new TestDbFixture();
+        _vaultId = _fx.Vaults.AddVaultAsync("test", _vault.Path).GetAwaiter().GetResult();
+        _vaultRecord = _fx.Vaults.GetVaultByPathAsync(_vault.Path).GetAwaiter().GetResult()!;
     }
 
     public void Dispose()
     {
-        _db.Dispose();
+        _fx.Dispose();
         _vault.Dispose();
     }
 
@@ -50,7 +50,7 @@ public class DailyHandlersTests : IDisposable
     [Fact]
     public async Task DailyRead_creates_file_when_missing_and_inline_indexes_it()
     {
-        var handler = new DailyReadHandler(_parser, _db);
+        var handler = new DailyReadHandler(_parser, _fx.Vaults, _fx.InlineIndex);
 
         var result = (NoteContent)(await handler.HandleAsync(
             Req("daily:read", ("vault", "test"), ("date", "2026-05-08")),
@@ -59,13 +59,13 @@ public class DailyHandlersTests : IDisposable
         Assert.True(File.Exists(result.Path));
         Assert.EndsWith(Path.Combine("daily", "2026-05-08.md"), result.Path);
         // Inline-indexed: count == 1 immediately, no watcher delay.
-        Assert.Single(await _db.GetAllPathsAsync(_vaultId));
+        Assert.Single(await _fx.Notes.GetAllPathsAsync(_vaultId));
     }
 
     [Fact]
     public async Task DailyAppend_creates_file_when_missing_and_writes_content()
     {
-        var handler = new DailyAppendHandler(_parser, _db);
+        var handler = new DailyAppendHandler(_parser, _fx.Vaults, _fx.InlineIndex);
 
         var result = (NotePathResult)(await handler.HandleAsync(
             Req("daily:append",
@@ -81,7 +81,7 @@ public class DailyHandlersTests : IDisposable
     [Fact]
     public async Task DailyAppend_appends_to_existing_file()
     {
-        var handler = new DailyAppendHandler(_parser, _db);
+        var handler = new DailyAppendHandler(_parser, _fx.Vaults, _fx.InlineIndex);
         await handler.HandleAsync(
             Req("daily:append", ("vault", "test"), ("date", "2026-05-08"), ("content", "first")),
             CancellationToken.None);
@@ -99,7 +99,7 @@ public class DailyHandlersTests : IDisposable
     [Fact]
     public async Task DailyRead_throws_when_no_vault_in_scope()
     {
-        var handler = new DailyReadHandler(_parser, _db);
+        var handler = new DailyReadHandler(_parser, _fx.Vaults, _fx.InlineIndex);
 
         await Assert.ThrowsAsync<ArgumentException>(async () => await handler.HandleAsync(
             Req("daily:read", ("date", "2026-05-08")),
@@ -110,26 +110,26 @@ public class DailyHandlersTests : IDisposable
 public class InlineIndexTests : IDisposable
 {
     private readonly TempVault _vault = new();
-    private readonly IndexDb _db;
+    private readonly TestDbFixture _fx;
     private readonly NoteParser _parser = new();
     private readonly long _vaultId;
 
     public InlineIndexTests()
     {
-        _db = new IndexDb(Path.Combine(_vault.Path, "index.db"));
-        _vaultId = _db.AddVaultAsync("v", _vault.Path).GetAwaiter().GetResult();
+        _fx = new TestDbFixture();
+        _vaultId = _fx.Vaults.AddVaultAsync("v", _vault.Path).GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _db.Dispose();
+        _fx.Dispose();
         _vault.Dispose();
     }
 
     [Fact]
     public async Task NoteCreate_makes_the_note_searchable_immediately_without_a_watcher()
     {
-        var handler = new NoteCreateHandler(_db, _parser);
+        var handler = new NoteCreateHandler(_fx.Vaults, _fx.Notes, _fx.InlineIndex, _parser);
         var path = Path.Combine(_vault.Path, "fresh.md");
         var request = new IpcRequest("note:create", new()
         {
@@ -143,7 +143,7 @@ public class InlineIndexTests : IDisposable
         // Immediate search — would race the 200 ms watcher debounce without
         // inline indexing. With it, the note is in the index before the
         // handler returns.
-        var hits = await _db.SearchAsync("capybara", vaultId: _vaultId);
+        var hits = await _fx.Search.SearchAsync("capybara", vaultId: _vaultId);
         Assert.Single(hits);
         Assert.Equal(path, hits[0].Path);
     }
@@ -151,11 +151,11 @@ public class InlineIndexTests : IDisposable
     [Fact]
     public async Task NoteDelete_removes_the_note_from_the_index_immediately()
     {
-        var handler = new NoteDeleteHandler(_db);
+        var handler = new NoteDeleteHandler(_fx.Vaults, _fx.Notes, _fx.InlineIndex);
         var path = Path.Combine(_vault.Path, "doomed.md");
         File.WriteAllText(path, "body");
-        await _db.UpsertNotesAsync(_vaultId, [_parser.Parse(path)]);
-        Assert.Single(await _db.GetAllPathsAsync(_vaultId));
+        await _fx.UpsertAsync(_vaultId, [_parser.Parse(path)]);
+        Assert.Single(await _fx.Notes.GetAllPathsAsync(_vaultId));
 
         var request = new IpcRequest("note:delete", new()
         {
@@ -164,6 +164,6 @@ public class InlineIndexTests : IDisposable
         });
         await handler.HandleAsync(request, CancellationToken.None);
 
-        Assert.Empty(await _db.GetAllPathsAsync(_vaultId));
+        Assert.Empty(await _fx.Notes.GetAllPathsAsync(_vaultId));
     }
 }

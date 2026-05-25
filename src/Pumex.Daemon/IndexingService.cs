@@ -5,7 +5,9 @@ namespace Pumex.Daemon;
 public sealed class IndexingService : IDisposable
 {
     private readonly VaultRecord _vault;
-    private readonly IndexDb _db;
+    private readonly IndexDbContext _context;
+    private readonly INoteRepository _noteRepo;
+    private readonly ILinkRepository _linkRepo;
     private readonly NoteParser _parser;
     private readonly WikilinkResolver _resolver;
     private readonly VaultWatcher _watcher;
@@ -13,14 +15,18 @@ public sealed class IndexingService : IDisposable
 
     public IndexingService(
         VaultRecord vault,
-        IndexDb db,
+        IndexDbContext context,
+        INoteRepository noteRepo,
+        ILinkRepository linkRepo,
         NoteParser parser,
         WikilinkResolver resolver,
         VaultWatcher watcher,
         ILogger<IndexingService> logger)
     {
         _vault = vault;
-        _db = db;
+        _context = context;
+        _noteRepo = noteRepo;
+        _linkRepo = linkRepo;
         _parser = parser;
         _resolver = resolver;
         _watcher = watcher;
@@ -53,7 +59,7 @@ public sealed class IndexingService : IDisposable
 
         await FullScanAsync(ct);
 
-        var allPaths = await _db.GetAllPathsAsync(_vault.Id);
+        var allPaths = await _noteRepo.GetAllPathsAsync(_vault.Id);
         _resolver.Rebuild(allPaths);
         await ResolvePendingLinksAsync(ct);
 
@@ -72,7 +78,7 @@ public sealed class IndexingService : IDisposable
 
     private async Task FullScanAsync(CancellationToken ct)
     {
-        var indexed = await _db.GetAllMtimesAsync(_vault.Id);
+        var indexed = await _noteRepo.GetAllMtimesAsync(_vault.Id);
         var batch = new List<string>(50);
 
         IEnumerator<string>? enumerator = null;
@@ -116,7 +122,7 @@ public sealed class IndexingService : IDisposable
         // Anything still in `indexed` is gone from disk.
         foreach (var path in indexed.Keys)
         {
-            try { await _db.DeleteNoteAsync(path); }
+            try { await _noteRepo.DeleteNoteAsync(path); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to remove deleted note {Path}", path); }
         }
     }
@@ -131,7 +137,7 @@ public sealed class IndexingService : IDisposable
         }
 
         if (docs.Count > 0)
-            await _db.UpsertNotesAsync(_vault.Id, docs);
+            await UpsertWithTransactionAsync(docs);
     }
 
     private async Task HandleEventAsync(FileEvent evt)
@@ -144,12 +150,12 @@ public sealed class IndexingService : IDisposable
                 case FileEventType.Changed:
                     if (!File.Exists(evt.Path)) return;
                     var doc = _parser.Parse(evt.Path);
-                    await _db.UpsertNotesAsync(_vault.Id, [doc]);
+                    await UpsertWithTransactionAsync([doc]);
                     _resolver.Add(evt.Path);
                     break;
 
                 case FileEventType.Deleted:
-                    await _db.DeleteNoteAsync(evt.Path);
+                    await _noteRepo.DeleteNoteAsync(evt.Path);
                     _resolver.Remove(evt.Path);
                     break;
             }
@@ -160,18 +166,42 @@ public sealed class IndexingService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Performs a full upsert (notes + tags + properties + FTS + links) for the
+    /// given documents inside a single transaction. IndexingService owns the
+    /// transaction lifecycle as the unit-of-work initiator.
+    /// </summary>
+    private async Task UpsertWithTransactionAsync(IReadOnlyList<NoteDocument> docs)
+    {
+        using var gate = await _context.AcquireAsync();
+        using var tx = _context.BeginTransaction();
+        try
+        {
+            var result = await _noteRepo.UpsertCoreAsync(tx, _vault.Id, docs);
+            await _linkRepo.DeleteLinksForNotesAsync(tx, result.Entries.Select(e => e.Id).ToList());
+            await _linkRepo.InsertLinksAsync(tx, result.Links);
+            tx.Commit();
+            _noteRepo.UpdateCacheUnsafe(result.Entries);
+        }
+        catch
+        {
+            tx.Rollback();
+            throw;
+        }
+    }
+
     private async Task ResolvePendingLinksAsync(CancellationToken ct)
     {
-        foreach (var link in await _db.GetUnresolvedLinksAsync(_vault.Id))
+        foreach (var link in await _linkRepo.GetUnresolvedLinksAsync(_vault.Id))
         {
             ct.ThrowIfCancellationRequested();
 
             var resolvedPath = _resolver.Resolve(link.TargetText, link.SourcePath);
             if (resolvedPath is null) continue;
 
-            var resolvedId = await _db.GetNoteIdAsync(resolvedPath);
+            var resolvedId = await _noteRepo.GetNoteIdAsync(resolvedPath);
             if (resolvedId is not null)
-                await _db.SetLinkResolutionAsync(link.SourceId, link.TargetText, resolvedId);
+                await _linkRepo.SetLinkResolutionAsync(link.SourceId, link.TargetText, resolvedId);
         }
     }
 

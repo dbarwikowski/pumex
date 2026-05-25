@@ -35,11 +35,17 @@ public class ColdFullScanBenchmarks
     public async Task ColdFullScan()
     {
         var dbPath = Path.Combine(_dbDir, $"cold-{Guid.NewGuid():N}.db");
-        using var db = new IndexDb(dbPath);
-        await db.AddVaultAsync("bench", _vaultRoot);
-        var vault = (await db.GetVaultByPathAsync(_vaultRoot))!;
+        var ctx = new IndexDbContext(dbPath);
+        new IndexSchema(ctx).Apply();
+        var notes = new NoteRepository(ctx);
+        var links = new LinkRepository(ctx);
+        var vaults = new VaultRepository(ctx, notes);
 
-        await IndexingBench.RunInitialScanAsync(db, vault);
+        await vaults.AddVaultAsync("bench", _vaultRoot);
+        var vault = (await vaults.GetVaultByPathAsync(_vaultRoot))!;
+
+        await IndexingBench.RunInitialScanAsync(ctx, notes, links, vault);
+        ctx.Dispose();
     }
 }
 
@@ -66,10 +72,16 @@ public class WarmFullScanBenchmarks
         Directory.CreateDirectory(_dbDir);
         _dbPath = Path.Combine(_dbDir, "warm.db");
 
-        using var db = new IndexDb(_dbPath);
-        await db.AddVaultAsync("bench", _vaultRoot);
-        var vault = (await db.GetVaultByPathAsync(_vaultRoot))!;
-        await IndexingBench.RunInitialScanAsync(db, vault);
+        var ctx = new IndexDbContext(_dbPath);
+        new IndexSchema(ctx).Apply();
+        var notes = new NoteRepository(ctx);
+        var links = new LinkRepository(ctx);
+        var vaults = new VaultRepository(ctx, notes);
+
+        await vaults.AddVaultAsync("bench", _vaultRoot);
+        var vault = (await vaults.GetVaultByPathAsync(_vaultRoot))!;
+        await IndexingBench.RunInitialScanAsync(ctx, notes, links, vault);
+        ctx.Dispose();
     }
 
     [GlobalCleanup]
@@ -82,22 +94,32 @@ public class WarmFullScanBenchmarks
     [Benchmark]
     public async Task WarmFullScan()
     {
-        using var db = new IndexDb(_dbPath);
-        var vault = (await db.GetVaultByPathAsync(_vaultRoot))!;
-        await IndexingBench.RunInitialScanAsync(db, vault);
+        var ctx = new IndexDbContext(_dbPath);
+        new IndexSchema(ctx).Apply();
+        var notes = new NoteRepository(ctx);
+        var links = new LinkRepository(ctx);
+        var vaults = new VaultRepository(ctx, notes);
+
+        var vault = (await vaults.GetVaultByPathAsync(_vaultRoot))!;
+        await IndexingBench.RunInitialScanAsync(ctx, notes, links, vault);
+        ctx.Dispose();
     }
 }
 
 internal static class IndexingBench
 {
-    public static async Task RunInitialScanAsync(IndexDb db, VaultRecord vault)
+    public static async Task RunInitialScanAsync(
+        IndexDbContext context,
+        INoteRepository noteRepo,
+        ILinkRepository linkRepo,
+        VaultRecord vault)
     {
         // Inlined replica of IndexingService.FullScanAsync to isolate the cost
         // of disk walk + parse + upsert without the watcher / link-resolution
         // tail. Keeping it here means the benchmark is stable across refactors
         // of the production service's surrounding code.
         var parser = new NoteParser();
-        var indexed = await db.GetAllMtimesAsync(vault.Id);
+        var indexed = await noteRepo.GetAllMtimesAsync(vault.Id);
         var batch = new List<NoteDocument>(50);
 
         foreach (var file in Directory.EnumerateFiles(vault.Path, "*.md", SearchOption.AllDirectories))
@@ -112,14 +134,39 @@ internal static class IndexingBench
             batch.Add(parser.Parse(file));
             if (batch.Count >= 50)
             {
-                await db.UpsertNotesAsync(vault.Id, batch);
+                await UpsertBatchAsync(context, noteRepo, linkRepo, vault.Id, batch);
                 batch.Clear();
             }
         }
-        if (batch.Count > 0) await db.UpsertNotesAsync(vault.Id, batch);
+        if (batch.Count > 0)
+            await UpsertBatchAsync(context, noteRepo, linkRepo, vault.Id, batch);
 
         foreach (var path in indexed.Keys)
-            await db.DeleteNoteAsync(path);
+            await noteRepo.DeleteNoteAsync(path);
+    }
+
+    internal static async Task UpsertBatchAsync(
+        IndexDbContext context,
+        INoteRepository noteRepo,
+        ILinkRepository linkRepo,
+        long vaultId,
+        IReadOnlyList<NoteDocument> docs)
+    {
+        using var gate = await context.AcquireAsync();
+        using var tx = context.BeginTransaction();
+        try
+        {
+            var result = await noteRepo.UpsertCoreAsync(tx, vaultId, docs);
+            await linkRepo.DeleteLinksForNotesAsync(tx, result.Entries.Select(e => e.Id).ToList());
+            await linkRepo.InsertLinksAsync(tx, result.Links);
+            tx.Commit();
+            noteRepo.UpdateCacheUnsafe(result.Entries);
+        }
+        catch
+        {
+            tx.Rollback();
+            throw;
+        }
     }
 }
 
@@ -149,12 +196,16 @@ public class IncrementalUpdateBenchmarks
         _dbPath = Path.Combine(_dbDir, "incremental.db");
         _parser = new NoteParser();
 
-        using (var db = new IndexDb(_dbPath))
-        {
-            _vaultId = await db.AddVaultAsync("bench", _vaultRoot);
-            var vault = (await db.GetVaultByPathAsync(_vaultRoot))!;
-            await PrimeAsync(db, vault);
-        }
+        var ctx = new IndexDbContext(_dbPath);
+        new IndexSchema(ctx).Apply();
+        var notes = new NoteRepository(ctx);
+        var links = new LinkRepository(ctx);
+        var vaults = new VaultRepository(ctx, notes);
+
+        _vaultId = await vaults.AddVaultAsync("bench", _vaultRoot);
+        var vault = (await vaults.GetVaultByPathAsync(_vaultRoot))!;
+        await PrimeAsync(ctx, notes, links, vault);
+        ctx.Dispose();
 
         _targetPath = Directory.EnumerateFiles(_vaultRoot, "*.md").Skip(VaultSize / 2).First();
     }
@@ -171,24 +222,32 @@ public class IncrementalUpdateBenchmarks
     {
         // Reopen the DB inside the benchmark so we measure realistic latency
         // including a fresh connection. SQLite's WAL mode keeps this cheap.
-        using var db = new IndexDb(_dbPath);
+        var ctx = new IndexDbContext(_dbPath);
+        new IndexSchema(ctx).Apply();
+        var notes = new NoteRepository(ctx);
+        var links = new LinkRepository(ctx);
+
         var doc = _parser.Parse(_targetPath);
-        await db.UpsertNotesAsync(_vaultId, [doc]);
+        await IndexingBench.UpsertBatchAsync(ctx, notes, links, _vaultId, [doc]);
+        ctx.Dispose();
     }
 
-    private async Task PrimeAsync(IndexDb db, VaultRecord vault)
+    private static async Task PrimeAsync(
+        IndexDbContext context, INoteRepository noteRepo, ILinkRepository linkRepo, VaultRecord vault)
     {
+        var parser = new NoteParser();
         var batch = new List<NoteDocument>(50);
         foreach (var file in Directory.EnumerateFiles(vault.Path, "*.md", SearchOption.AllDirectories))
         {
-            batch.Add(_parser.Parse(file));
+            batch.Add(parser.Parse(file));
             if (batch.Count >= 50)
             {
-                await db.UpsertNotesAsync(vault.Id, batch);
+                await IndexingBench.UpsertBatchAsync(context, noteRepo, linkRepo, vault.Id, batch);
                 batch.Clear();
             }
         }
-        if (batch.Count > 0) await db.UpsertNotesAsync(vault.Id, batch);
+        if (batch.Count > 0)
+            await IndexingBench.UpsertBatchAsync(context, noteRepo, linkRepo, vault.Id, batch);
     }
 }
 
@@ -201,7 +260,8 @@ public class SearchBenchmarks
 
     private string _vaultRoot = null!;
     private string _dbDir = null!;
-    private IndexDb _db = null!;
+    private IndexDbContext _context = null!;
+    private ISearchRepository _search = null!;
     private long _vaultId;
 
     [GlobalSetup]
@@ -210,28 +270,23 @@ public class SearchBenchmarks
         _vaultRoot = BenchmarkVaultBuilder.Build(VaultSize);
         _dbDir = Path.Combine(Path.GetTempPath(), "pumex-bench-db-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dbDir);
-        _db = new IndexDb(Path.Combine(_dbDir, "search.db"));
-        _vaultId = await _db.AddVaultAsync("bench", _vaultRoot);
-        var vault = (await _db.GetVaultByPathAsync(_vaultRoot))!;
+        _context = new IndexDbContext(Path.Combine(_dbDir, "search.db"));
+        new IndexSchema(_context).Apply();
+        var notes = new NoteRepository(_context);
+        var links = new LinkRepository(_context);
+        var vaults = new VaultRepository(_context, notes);
+        _search = new SearchRepository(_context);
 
-        var parser = new NoteParser();
-        var batch = new List<NoteDocument>(50);
-        foreach (var file in Directory.EnumerateFiles(vault.Path, "*.md", SearchOption.AllDirectories))
-        {
-            batch.Add(parser.Parse(file));
-            if (batch.Count >= 50)
-            {
-                await _db.UpsertNotesAsync(vault.Id, batch);
-                batch.Clear();
-            }
-        }
-        if (batch.Count > 0) await _db.UpsertNotesAsync(vault.Id, batch);
+        _vaultId = await vaults.AddVaultAsync("bench", _vaultRoot);
+        var vault = (await vaults.GetVaultByPathAsync(_vaultRoot))!;
+
+        await PrimeAsync(_context, notes, links, vault);
     }
 
     [GlobalCleanup]
     public void Cleanup()
     {
-        _db.Dispose();
+        _context.Dispose();
         BenchmarkVaultBuilder.Cleanup(_vaultRoot);
         try { Directory.Delete(_dbDir, recursive: true); } catch { }
     }
@@ -239,15 +294,32 @@ public class SearchBenchmarks
     [Benchmark]
     public async Task<int> Search_common_term_global()
     {
-        var hits = await _db.SearchAsync("context");
+        var hits = await _search.SearchAsync("context");
         return hits.Count;
     }
 
     [Benchmark]
     public async Task<int> Search_common_term_scoped()
     {
-        var hits = await _db.SearchAsync("context", vaultId: _vaultId);
+        var hits = await _search.SearchAsync("context", vaultId: _vaultId);
         return hits.Count;
     }
-}
 
+    private static async Task PrimeAsync(
+        IndexDbContext context, INoteRepository noteRepo, ILinkRepository linkRepo, VaultRecord vault)
+    {
+        var parser = new NoteParser();
+        var batch = new List<NoteDocument>(50);
+        foreach (var file in Directory.EnumerateFiles(vault.Path, "*.md", SearchOption.AllDirectories))
+        {
+            batch.Add(parser.Parse(file));
+            if (batch.Count >= 50)
+            {
+                await IndexingBench.UpsertBatchAsync(context, noteRepo, linkRepo, vault.Id, batch);
+                batch.Clear();
+            }
+        }
+        if (batch.Count > 0)
+            await IndexingBench.UpsertBatchAsync(context, noteRepo, linkRepo, vault.Id, batch);
+    }
+}

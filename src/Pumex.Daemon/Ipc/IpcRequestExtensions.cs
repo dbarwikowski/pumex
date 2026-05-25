@@ -40,7 +40,7 @@ internal static class IpcRequestExtensions
     public static async Task<string> ResolveNotePathAsync(
         string rawPath,
         VaultRecord? vault,
-        IndexDb db,
+        INoteRepository notes,
         NoteResolutionMode mode = NoteResolutionMode.Existing)
     {
         if (Path.IsPathFullyQualified(rawPath))
@@ -69,7 +69,7 @@ internal static class IpcRequestExtensions
         if (mode == NoteResolutionMode.Create)
             return Path.GetFullPath(Path.Combine(vault.Path, name + ".md"));
 
-        var matches = await db.GetNotePathsByNameAsync(vault.Id, name);
+        var matches = await notes.GetNotePathsByNameAsync(vault.Id, name);
         return matches.Count switch
         {
             1 => matches[0],
@@ -85,12 +85,12 @@ internal static class IpcRequestExtensions
     /// "vaultPath" args; returns null when neither is present (global scope).
     /// Throws when a name/path is given but doesn't match a registered vault.
     /// </summary>
-    public static async Task<VaultRecord?> ResolveVaultAsync(this IpcRequest request, IndexDb db)
+    public static async Task<VaultRecord?> ResolveVaultAsync(this IpcRequest request, IVaultRepository vaults)
     {
         var name = request.Optional("vault");
         if (!string.IsNullOrWhiteSpace(name))
         {
-            return await db.GetVaultByNameAsync(name)
+            return await vaults.GetVaultByNameAsync(name)
                 ?? throw new ArgumentException($"vault not found: {name}");
         }
 
@@ -98,7 +98,7 @@ internal static class IpcRequestExtensions
         if (!string.IsNullOrWhiteSpace(path))
         {
             var full = Path.GetFullPath(path);
-            var vault = await db.GetVaultByPathAsync(full);
+            var vault = await vaults.GetVaultByPathAsync(full);
             if (vault is not null) return vault;
             if (request.Flag("vaultOptional")) return null;
             throw new ArgumentException($"vault not registered for path: {full}");

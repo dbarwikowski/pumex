@@ -54,19 +54,21 @@ internal static class Daily
 public class DailyReadHandler : ICommandHandler
 {
     private readonly NoteParser _parser;
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
+    private readonly IInlineIndex _inlineIndex;
 
     public string Command => "daily:read";
 
-    public DailyReadHandler(NoteParser parser, IndexDb db)
+    public DailyReadHandler(NoteParser parser, IVaultRepository vaults, IInlineIndex inlineIndex)
     {
         _parser = parser;
-        _db = db;
+        _vaults = vaults;
+        _inlineIndex = inlineIndex;
     }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var vault = await request.ResolveVaultAsync(_db)
+        var vault = await request.ResolveVaultAsync(_vaults)
             ?? throw new ArgumentException("daily commands need a vault. Pass --vault NAME, --vault-path PATH, or run from inside a vault.");
         var config = await Daily.LoadConfigAsync(vault, ct);
         var path = Daily.PathFor(vault, config, Daily.ParseDate(request.Optional("date")));
@@ -75,7 +77,7 @@ public class DailyReadHandler : ICommandHandler
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, "", ct);
-            await InlineIndex.UpsertAsync(_db, _parser, vault.Id, path);
+            await _inlineIndex.UpsertAsync(vault.Id, path);
         }
 
         var doc = _parser.Parse(path);
@@ -87,19 +89,21 @@ public class DailyReadHandler : ICommandHandler
 public class DailyAppendHandler : ICommandHandler
 {
     private readonly NoteParser _parser;
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
+    private readonly IInlineIndex _inlineIndex;
 
     public string Command => "daily:append";
 
-    public DailyAppendHandler(NoteParser parser, IndexDb db)
+    public DailyAppendHandler(NoteParser parser, IVaultRepository vaults, IInlineIndex inlineIndex)
     {
         _parser = parser;
-        _db = db;
+        _vaults = vaults;
+        _inlineIndex = inlineIndex;
     }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var vault = await request.ResolveVaultAsync(_db)
+        var vault = await request.ResolveVaultAsync(_vaults)
             ?? throw new ArgumentException("daily commands need a vault. Pass --vault NAME, --vault-path PATH, or run from inside a vault.");
         var config = await Daily.LoadConfigAsync(vault, ct);
         var path = Daily.PathFor(vault, config, Daily.ParseDate(request.Optional("date")));
@@ -121,7 +125,7 @@ public class DailyAppendHandler : ICommandHandler
             await File.AppendAllTextAsync(path, prefix + content + suffix, ct);
         }
 
-        await InlineIndex.UpsertAsync(_db, _parser, vault.Id, path);
+        await _inlineIndex.UpsertAsync(vault.Id, path);
         return new NotePathResult(path);
     }
 }

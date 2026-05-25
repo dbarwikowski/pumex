@@ -35,8 +35,7 @@ public class IpcServerTests
     {
         using var fixture = await TestVault.CreateAsync();
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new SearchHandler(fixture.Db)),
-            db: fixture.Db);
+            handlers => handlers.Add(new SearchHandler(fixture.Vaults, fixture.Search)));
 
         var note = new NoteDocument(
             Path: Path.Combine(fixture.Root, "n.md"),
@@ -48,7 +47,7 @@ public class IpcServerTests
             Mtime: 1, Size: 32);
         // Snippet builder reads from disk, so the file must actually exist.
         File.WriteAllText(note.Path, note.Content);
-        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [note]);
+        await fixture.UpsertAsync(fixture.Vault.Id, [note]);
 
         var resp = await run.Client.SendAsync<List<SearchResult>>("search", new()
         {
@@ -68,13 +67,13 @@ public class IpcServerTests
         // Two notes — the bare name "today" must pick the right one.
         var todayPath = fixture.WriteNote("today.md", "# today\n\nhello world\n");
         fixture.WriteNote("yesterday.md", "# yesterday\n");
-        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [
+        await fixture.UpsertAsync(fixture.Vault.Id, [
             ParseFrom(todayPath),
             ParseFrom(Path.Combine(fixture.Root, "yesterday.md")),
         ]);
 
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Db)));
+            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Vaults, fixture.Notes)));
 
         var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
         {
@@ -91,10 +90,10 @@ public class IpcServerTests
     {
         using var fixture = await TestVault.CreateAsync();
         var path = fixture.WriteNote("aliases.md", "---\naliases: [render test, fm test]\n---\n\nbody\n");
-        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [ParseFrom(path)]);
+        await fixture.UpsertAsync(fixture.Vault.Id, [ParseFrom(path)]);
 
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Db)));
+            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Vaults, fixture.Notes)));
 
         var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
         {
@@ -111,10 +110,10 @@ public class IpcServerTests
     {
         using var fixture = await TestVault.CreateAsync();
         var path = fixture.WriteNote("tagged.md", "---\ntags: [test, pumex]\ntitle: Hello\n---\n\nbody\n");
-        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [ParseFrom(path)]);
+        await fixture.UpsertAsync(fixture.Vault.Id, [ParseFrom(path)]);
 
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Db)));
+            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Vaults, fixture.Notes)));
 
         var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
         {
@@ -132,10 +131,10 @@ public class IpcServerTests
     {
         using var fixture = await TestVault.CreateAsync();
         var path = fixture.WriteNote("nested.md", "---\nmeta:\n  author: Alice\n  labels: [a, b]\n---\n\nbody\n");
-        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [ParseFrom(path)]);
+        await fixture.UpsertAsync(fixture.Vault.Id, [ParseFrom(path)]);
 
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Db)));
+            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Vaults, fixture.Notes)));
 
         var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
         {
@@ -152,10 +151,10 @@ public class IpcServerTests
     {
         using var fixture = await TestVault.CreateAsync();
         var path = fixture.WriteNote("emptylist.md", "---\naliases: []\n---\n\nbody\n");
-        await fixture.Db.UpsertNotesAsync(fixture.Vault.Id, [ParseFrom(path)]);
+        await fixture.UpsertAsync(fixture.Vault.Id, [ParseFrom(path)]);
 
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Db)));
+            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Vaults, fixture.Notes)));
 
         var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
         {
@@ -175,18 +174,16 @@ public class IpcServerTests
         private readonly IpcServer _server;
         private readonly Task _task;
         private readonly CancellationTokenSource _cts;
-        private readonly TestVault? _ownedFixture;
 
-        private IpcServerRun(IpcServer server, Task task, CancellationTokenSource cts, TestIpcClient client, TestVault? ownedFixture)
+        private IpcServerRun(IpcServer server, Task task, CancellationTokenSource cts, TestIpcClient client)
         {
             _server = server;
             _task = task;
             _cts = cts;
             Client = client;
-            _ownedFixture = ownedFixture;
         }
 
-        public static async Task<IpcServerRun> StartAsync(Action<List<ICommandHandler>> configureHandlers, IndexDb? db = null)
+        public static async Task<IpcServerRun> StartAsync(Action<List<ICommandHandler>> configureHandlers)
         {
             var pipeName = "pumex-test-" + Guid.NewGuid().ToString("N");
             var handlers = new List<ICommandHandler>();
@@ -198,7 +195,7 @@ public class IpcServerTests
             // BackgroundService.StartAsync hands control back as soon as ExecuteAsync hits its first await.
             // The pipe server registers on the first WaitForConnectionAsync, so we give it a beat.
             await Task.Delay(50);
-            return new IpcServerRun(server, Task.CompletedTask, cts, new TestIpcClient(pipeName), null);
+            return new IpcServerRun(server, Task.CompletedTask, cts, new TestIpcClient(pipeName));
         }
 
         public async ValueTask DisposeAsync()
@@ -206,7 +203,6 @@ public class IpcServerTests
             _cts.Cancel();
             try { await _server.StopAsync(CancellationToken.None); } catch { }
             _cts.Dispose();
-            _ownedFixture?.Dispose();
         }
     }
 }
