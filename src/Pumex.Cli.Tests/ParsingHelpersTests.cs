@@ -1,4 +1,4 @@
-using Pumex.Cli;
+using Pumex.Cli.Commands;
 
 namespace Pumex.Cli.Tests;
 
@@ -12,7 +12,7 @@ public class ParsingHelpersTests
     [InlineData(new string[0], new string[0])]
     public void ExpandTags_splits_comma_separated_and_flattens(string[] input, string[] expected)
     {
-        Assert.Equal(expected, Commands.ExpandTags(input));
+        Assert.Equal(expected, CommandHelpers.ExpandTags(input));
     }
 
     [Theory]
@@ -22,6 +22,6 @@ public class ParsingHelpersTests
     [InlineData(new string[0], new string[0])]
     public void ExpandProperties_handles_equals_and_pair_syntax(string[] input, string[] expected)
     {
-        Assert.Equal(expected, Commands.ExpandProperties(input));
+        Assert.Equal(expected, CommandHelpers.ExpandProperties(input));
     }
 }
