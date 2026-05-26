@@ -4,26 +4,26 @@ namespace Pumex.Daemon.Ipc;
 
 public class VaultsHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
 
     public string Command => "vaults";
 
-    public VaultsHandler(IndexDb db) => _db = db;
+    public VaultsHandler(IVaultRepository vaults) => _vaults = vaults;
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct) =>
-        await _db.GetVaultsAsync();
+        await _vaults.GetVaultsAsync();
 }
 
 public class VaultAddHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
     private readonly VaultIndexingOrchestrator _orchestrator;
 
     public string Command => "vault:add";
 
-    public VaultAddHandler(IndexDb db, VaultIndexingOrchestrator orchestrator)
+    public VaultAddHandler(IVaultRepository vaults, VaultIndexingOrchestrator orchestrator)
     {
-        _db = db;
+        _vaults = vaults;
         _orchestrator = orchestrator;
     }
 
@@ -38,12 +38,12 @@ public class VaultAddHandler : ICommandHandler
         if (!Directory.Exists(fullPath))
             throw new ArgumentException($"Path does not exist: {fullPath}");
 
-        var existing = await _db.GetVaultByPathAsync(fullPath);
+        var existing = await _vaults.GetVaultByPathAsync(fullPath);
         if (existing is not null && existing.Name != name)
             throw new ArgumentException($"path already registered as vault '{existing.Name}'; remove it first.");
 
-        await _db.AddVaultAsync(name, fullPath);
-        var vault = await _db.GetVaultByPathAsync(fullPath)
+        await _vaults.AddVaultAsync(name, fullPath);
+        var vault = await _vaults.GetVaultByPathAsync(fullPath)
             ?? throw new InvalidOperationException("Vault row missing after insert");
 
         await _orchestrator.AddVaultAsync(vault);
@@ -53,27 +53,27 @@ public class VaultAddHandler : ICommandHandler
 
 public class VaultRemoveHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
     private readonly VaultIndexingOrchestrator _orchestrator;
 
     public string Command => "vault:remove";
 
-    public VaultRemoveHandler(IndexDb db, VaultIndexingOrchestrator orchestrator)
+    public VaultRemoveHandler(IVaultRepository vaults, VaultIndexingOrchestrator orchestrator)
     {
-        _db = db;
+        _vaults = vaults;
         _orchestrator = orchestrator;
     }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
         var name = request.Require("name");
-        var vault = await _db.GetVaultByNameAsync(name)
+        var vault = await _vaults.GetVaultByNameAsync(name)
             ?? throw new ArgumentException($"vault not found: {name}");
 
         // Stop the indexer first so the watcher releases its file handles
         // before we drop the DB rows.
         await _orchestrator.RemoveVaultAsync(vault.Id);
-        await _db.RemoveVaultAsync(vault.Id);
+        await _vaults.RemoveVaultAsync(vault.Id);
 
         // We deliberately do not delete the on-disk .pumex/ marker — the user's
         // notes stay intact. Re-registering with `vault add` reuses the same

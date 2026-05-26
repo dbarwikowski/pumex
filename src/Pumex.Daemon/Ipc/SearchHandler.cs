@@ -4,11 +4,16 @@ namespace Pumex.Daemon.Ipc;
 
 public class SearchHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
+    private readonly ISearchRepository _search;
 
     public string Command => "search";
 
-    public SearchHandler(IndexDb db) => _db = db;
+    public SearchHandler(IVaultRepository vaults, ISearchRepository search)
+    {
+        _vaults = vaults;
+        _search = search;
+    }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
@@ -18,7 +23,7 @@ public class SearchHandler : ICommandHandler
         // modified `limit` notes in the vault.
         var query = EscapeForFts(request.Optional("query"));
         var limit = request.Args.TryGetValue("limit", out var l) && int.TryParse(l, out var n) ? n : 50;
-        var vault = await request.ResolveVaultAsync(_db);
+        var vault = await request.ResolveVaultAsync(_vaults);
 
         // Wire format: tags=tag1,tag2 ; properties=k1=v1;k2=v2 (semicolon delimited so values may contain `=`).
         var tags = request.Optional("tags") is { Length: > 0 } tagStr
@@ -38,7 +43,7 @@ public class SearchHandler : ICommandHandler
             }
         }
 
-        return await _db.SearchAsync(query, limit, vault?.Id, tags, properties);
+        return await _search.SearchAsync(query, limit, vault?.Id, tags, properties);
     }
 
     // FTS5's query parser treats `-`, `:`, `(`, `)`, and uppercase AND/OR/NOT/NEAR

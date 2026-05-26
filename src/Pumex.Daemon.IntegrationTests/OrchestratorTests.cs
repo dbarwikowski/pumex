@@ -7,25 +7,36 @@ namespace Pumex.Daemon.IntegrationTests;
 public class OrchestratorTests : IDisposable
 {
     private readonly string _sandbox;
-    private readonly IndexDb _db;
+    private readonly IndexDbContext _context;
+    private readonly IVaultRepository _vaults;
+    private readonly INoteRepository _notes;
+    private readonly ILinkRepository _links;
+    private readonly ISearchRepository _search;
 
     public OrchestratorTests()
     {
         _sandbox = Path.Combine(Path.GetTempPath(), "pumex-int-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_sandbox);
-        _db = new IndexDb(Path.Combine(_sandbox, "index.db"));
+        _context = new IndexDbContext(Path.Combine(_sandbox, "index.db"));
+        new IndexSchema(_context).Apply();
+        _notes = new NoteRepository(_context);
+        _links = new LinkRepository(_context);
+        _vaults = new VaultRepository(_context, _notes);
+        _search = new SearchRepository(_context);
     }
 
     public void Dispose()
     {
-        _db.Dispose();
+        _context.Dispose();
         try { Directory.Delete(_sandbox, recursive: true); }
         catch { /* test cleanup is best-effort */ }
     }
 
     private VaultIndexingOrchestrator BuildOrchestrator() =>
-        new(_db,
-            new IndexingServiceFactory(_db, new NoteParser(), NullLogger<IndexingService>.Instance),
+        new(_vaults,
+            new IndexingServiceFactory(
+                _context, _notes, _links, new NoteParser(),
+                NullLogger<IndexingService>.Instance),
             NullLogger<VaultIndexingOrchestrator>.Instance);
 
     private string CreateVaultDir(string name)
@@ -40,8 +51,8 @@ public class OrchestratorTests : IDisposable
     {
         var alphaDir = CreateVaultDir("alpha");
         File.WriteAllText(Path.Combine(alphaDir, "n.md"), "body with #hello\n");
-        await _db.AddVaultAsync("alpha", alphaDir);
-        var alpha = (await _db.GetVaultByPathAsync(alphaDir))!;
+        await _vaults.AddVaultAsync("alpha", alphaDir);
+        var alpha = (await _vaults.GetVaultByPathAsync(alphaDir))!;
 
         var orchestrator = BuildOrchestrator();
         using var cts = new CancellationTokenSource();
@@ -51,7 +62,7 @@ public class OrchestratorTests : IDisposable
         try
         {
             await AsyncPolling.UntilAsync(
-                async () => (await _db.GetAllPathsAsync(alpha.Id)).Count == 1,
+                async () => (await _notes.GetAllPathsAsync(alpha.Id)).Count == 1,
                 timeoutMs: 8000,
                 message: "vault alpha was not auto-indexed");
         }
@@ -69,10 +80,10 @@ public class OrchestratorTests : IDisposable
         File.WriteAllText(Path.Combine(alphaDir, "a.md"), "alpha body\n");
         var betaDir = CreateVaultDir("beta");
         File.WriteAllText(Path.Combine(betaDir, "b.md"), "beta body\n");
-        await _db.AddVaultAsync("alpha", alphaDir);
-        await _db.AddVaultAsync("beta",  betaDir);
-        var alpha = (await _db.GetVaultByPathAsync(alphaDir))!;
-        var beta  = (await _db.GetVaultByPathAsync(betaDir))!;
+        await _vaults.AddVaultAsync("alpha", alphaDir);
+        await _vaults.AddVaultAsync("beta",  betaDir);
+        var alpha = (await _vaults.GetVaultByPathAsync(alphaDir))!;
+        var beta  = (await _vaults.GetVaultByPathAsync(betaDir))!;
 
         var orchestrator = BuildOrchestrator();
         using var cts = new CancellationTokenSource();
@@ -81,8 +92,8 @@ public class OrchestratorTests : IDisposable
         try
         {
             await AsyncPolling.UntilAsync(
-                async () => (await _db.GetAllPathsAsync(alpha.Id)).Count == 1
-                         && (await _db.GetAllPathsAsync(beta.Id)).Count == 1,
+                async () => (await _notes.GetAllPathsAsync(alpha.Id)).Count == 1
+                         && (await _notes.GetAllPathsAsync(beta.Id)).Count == 1,
                 timeoutMs: 8000);
 
             await orchestrator.RemoveVaultAsync(alpha.Id);
@@ -90,7 +101,7 @@ public class OrchestratorTests : IDisposable
             // Beta keeps indexing — write a new file and verify it gets picked up.
             File.WriteAllText(Path.Combine(betaDir, "b2.md"), "still indexing, marker word: pangolin\n");
             await AsyncPolling.UntilAsync(
-                async () => (await _db.SearchAsync("pangolin", vaultId: beta.Id)).Count == 1,
+                async () => (await _search.SearchAsync("pangolin", vaultId: beta.Id)).Count == 1,
                 timeoutMs: 8000,
                 message: "beta vault stopped indexing after alpha was removed");
         }
@@ -112,15 +123,15 @@ public class OrchestratorTests : IDisposable
         {
             var betaDir = CreateVaultDir("beta");
             File.WriteAllText(Path.Combine(betaDir, "live.md"), "added live, marker word: pangolin\n");
-            await _db.AddVaultAsync("beta", betaDir);
-            var beta = (await _db.GetVaultByPathAsync(betaDir))!;
+            await _vaults.AddVaultAsync("beta", betaDir);
+            var beta = (await _vaults.GetVaultByPathAsync(betaDir))!;
 
             await orchestrator.AddVaultAsync(beta);
 
             await AsyncPolling.UntilAsync(
                 async () =>
                 {
-                    var hits = await _db.SearchAsync("pangolin", vaultId: beta.Id);
+                    var hits = await _search.SearchAsync("pangolin", vaultId: beta.Id);
                     return hits.Count == 1;
                 },
                 timeoutMs: 8000);

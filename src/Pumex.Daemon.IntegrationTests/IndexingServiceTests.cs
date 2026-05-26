@@ -15,9 +15,9 @@ public class IndexingServiceTests
         await using var run = await IndexingRun.StartAsync(fixture);
 
         await AsyncPolling.UntilAsync(
-            async () => (await fixture.Db.GetAllPathsAsync(fixture.Vault.Id)).Count == 2);
+            async () => (await fixture.Notes.GetAllPathsAsync(fixture.Vault.Id)).Count == 2);
 
-        var tags = await fixture.Db.GetTagsAsync(fixture.Vault.Id);
+        var tags = await fixture.Vaults.GetTagsAsync(fixture.Vault.Id);
         Assert.Single(tags);
         Assert.Equal("shared", tags[0].Tag);
         Assert.Equal(2, tags[0].Count);
@@ -29,7 +29,7 @@ public class IndexingServiceTests
         using var fixture = await TestVault.CreateAsync();
         fixture.WriteNote("seed.md", "seed body\n");
         await using var run = await IndexingRun.StartAsync(fixture);
-        await AsyncPolling.UntilAsync(async () => (await fixture.Db.GetAllPathsAsync(fixture.Vault.Id)).Count >= 1);
+        await AsyncPolling.UntilAsync(async () => (await fixture.Notes.GetAllPathsAsync(fixture.Vault.Id)).Count >= 1);
 
         // Newly created note must propagate through the watcher.
         fixture.WriteNote("fresh.md", "added at runtime, contains marker word: capybara\n");
@@ -37,7 +37,7 @@ public class IndexingServiceTests
         await AsyncPolling.UntilAsync(
             async () =>
             {
-                var hits = await fixture.Db.SearchAsync("capybara", vaultId: fixture.Vault.Id);
+                var hits = await fixture.Search.SearchAsync("capybara", vaultId: fixture.Vault.Id);
                 return hits.Any(h => h.Path.EndsWith("fresh.md"));
             },
             timeoutMs: 8000);
@@ -57,7 +57,7 @@ public class IndexingServiceTests
             {
                 var sourcePath = Path.Combine(fixture.Root, "source.md");
                 var targetPath = Path.Combine(fixture.Root, "target.md");
-                var backlinks = await fixture.Db.GetBacklinksAsync(targetPath, vaultId: fixture.Vault.Id);
+                var backlinks = await fixture.Links.GetBacklinksAsync(targetPath, vaultId: fixture.Vault.Id);
                 return backlinks.Any(b => string.Equals(b, sourcePath, StringComparison.OrdinalIgnoreCase));
             });
     }
@@ -70,12 +70,12 @@ public class IndexingServiceTests
         fixture.WriteNote("survivor.md", "body\n");
 
         await using var run = await IndexingRun.StartAsync(fixture);
-        await AsyncPolling.UntilAsync(async () => (await fixture.Db.GetAllPathsAsync(fixture.Vault.Id)).Count == 2);
+        await AsyncPolling.UntilAsync(async () => (await fixture.Notes.GetAllPathsAsync(fixture.Vault.Id)).Count == 2);
 
         File.Delete(doomed);
 
         await AsyncPolling.UntilAsync(
-            async () => (await fixture.Db.GetAllPathsAsync(fixture.Vault.Id)).Count == 1,
+            async () => (await fixture.Notes.GetAllPathsAsync(fixture.Vault.Id)).Count == 1,
             timeoutMs: 8000);
     }
 
@@ -101,7 +101,13 @@ public class IndexingServiceTests
         public static Task<IndexingRun> StartAsync(TestVault fixture)
         {
             var service = new IndexingService(
-                fixture.Vault, fixture.Db, new NoteParser(), new WikilinkResolver(), new VaultWatcher(),
+                fixture.Vault,
+                fixture.Context,
+                fixture.Notes,
+                fixture.Links,
+                new NoteParser(),
+                new WikilinkResolver(),
+                new VaultWatcher(),
                 NullLogger<IndexingService>.Instance);
             var cts = new CancellationTokenSource();
             var task = Task.Run(async () =>

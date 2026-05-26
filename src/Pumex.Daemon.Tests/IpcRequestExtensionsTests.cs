@@ -56,10 +56,10 @@ public class IpcRequestExtensionsTests
         // .NET's Path.IsPathFullyQualified + GetFullPath accept both directions
         // and canonicalise to the platform separator.
         if (!OperatingSystem.IsWindows()) return;
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
         var raw = "C:/some/path/note.md";
 
-        var resolved = await IpcRequestExtensions.ResolveNotePathAsync(raw, vault: null, fixture.Db);
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync(raw, vault: null, fx.Notes);
 
         Assert.Equal(@"C:\some\path\note.md", resolved);
     }
@@ -68,10 +68,10 @@ public class IpcRequestExtensionsTests
     public async Task ResolveNotePathAsync_accepts_forward_slashes_in_vault_relative_path()
     {
         if (!OperatingSystem.IsWindows()) return;
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
         var vault = new VaultRecord(Id: 1, Name: "v", Path: @"C:\vault");
 
-        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("sub/note.md", vault, fixture.Db);
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("sub/note.md", vault, fx.Notes);
 
         Assert.Equal(@"C:\vault\sub\note.md", resolved);
     }
@@ -79,11 +79,11 @@ public class IpcRequestExtensionsTests
     [Fact]
     public async Task ResolveNotePathAsync_returns_canonical_absolute_path_unchanged()
     {
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
         var raw = OperatingSystem.IsWindows() ? @"C:\foo\..\bar\note.md" : "/foo/../bar/note.md";
         var expected = Path.GetFullPath(raw);
 
-        var resolved = await IpcRequestExtensions.ResolveNotePathAsync(raw, vault: null, fixture.Db);
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync(raw, vault: null, fx.Notes);
 
         Assert.Equal(expected, resolved);
     }
@@ -91,10 +91,10 @@ public class IpcRequestExtensionsTests
     [Fact]
     public async Task ResolveNotePathAsync_appends_md_when_path_has_separator_but_no_extension()
     {
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
         var vault = new VaultRecord(Id: 1, Name: "v", Path: OperatingSystem.IsWindows() ? @"C:\vault" : "/vault");
 
-        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("wiki/index", vault, fixture.Db);
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("wiki/index", vault, fx.Notes);
 
         var expected = Path.GetFullPath(Path.Combine(vault.Path, "wiki/index.md"));
         Assert.Equal(expected, resolved);
@@ -103,10 +103,10 @@ public class IpcRequestExtensionsTests
     [Fact]
     public async Task ResolveNotePathAsync_joins_relative_against_vault_root_when_vault_in_scope()
     {
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
         var vault = new VaultRecord(Id: 1, Name: "v", Path: OperatingSystem.IsWindows() ? @"C:\vault" : "/vault");
 
-        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("sub/note.md", vault, fixture.Db);
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("sub/note.md", vault, fx.Notes);
 
         var expected = Path.GetFullPath(Path.Combine(vault.Path, "sub/note.md"));
         Assert.Equal(expected, resolved);
@@ -115,12 +115,12 @@ public class IpcRequestExtensionsTests
     [Fact]
     public async Task ResolveNotePathAsync_bare_name_resolves_via_index_when_unique()
     {
-        using var fixture = new IndexDbFixture();
-        var vaultId = await fixture.Db.AddVaultAsync("alpha", "/alpha");
-        var vault = (await fixture.Db.GetVaultByPathAsync("/alpha"))!;
-        await fixture.Db.UpsertNotesAsync(vaultId, [Note("/alpha/today.md")]);
+        using var fx = new TestDbFixture();
+        var vaultId = await fx.Vaults.AddVaultAsync("alpha", "/alpha");
+        var vault = (await fx.Vaults.GetVaultByPathAsync("/alpha"))!;
+        await fx.UpsertAsync(vaultId, [Note("/alpha/today.md")]);
 
-        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("today", vault, fixture.Db);
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("today", vault, fx.Notes);
 
         Assert.Equal("/alpha/today.md", resolved);
     }
@@ -128,12 +128,12 @@ public class IpcRequestExtensionsTests
     [Fact]
     public async Task ResolveNotePathAsync_strips_md_suffix_before_lookup()
     {
-        using var fixture = new IndexDbFixture();
-        var vaultId = await fixture.Db.AddVaultAsync("v", "/v");
-        var vault = (await fixture.Db.GetVaultByPathAsync("/v"))!;
-        await fixture.Db.UpsertNotesAsync(vaultId, [Note("/v/today.md")]);
+        using var fx = new TestDbFixture();
+        var vaultId = await fx.Vaults.AddVaultAsync("v", "/v");
+        var vault = (await fx.Vaults.GetVaultByPathAsync("/v"))!;
+        await fx.UpsertAsync(vaultId, [Note("/v/today.md")]);
 
-        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("today.md", vault, fixture.Db);
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("today.md", vault, fx.Notes);
 
         Assert.Equal("/v/today.md", resolved);
     }
@@ -141,45 +141,45 @@ public class IpcRequestExtensionsTests
     [Fact]
     public async Task ResolveNotePathAsync_throws_when_name_has_no_match()
     {
-        using var fixture = new IndexDbFixture();
-        await fixture.Db.AddVaultAsync("v", "/v");
-        var vault = (await fixture.Db.GetVaultByPathAsync("/v"))!;
+        using var fx = new TestDbFixture();
+        await fx.Vaults.AddVaultAsync("v", "/v");
+        var vault = (await fx.Vaults.GetVaultByPathAsync("/v"))!;
 
         await Assert.ThrowsAsync<FileNotFoundException>(
-            async () => await IpcRequestExtensions.ResolveNotePathAsync("ghost", vault, fixture.Db));
+            async () => await IpcRequestExtensions.ResolveNotePathAsync("ghost", vault, fx.Notes));
     }
 
     [Fact]
     public async Task ResolveNotePathAsync_throws_when_name_is_ambiguous()
     {
-        using var fixture = new IndexDbFixture();
-        var vaultId = await fixture.Db.AddVaultAsync("v", "/v");
-        var vault = (await fixture.Db.GetVaultByPathAsync("/v"))!;
-        await fixture.Db.UpsertNotesAsync(vaultId, [
+        using var fx = new TestDbFixture();
+        var vaultId = await fx.Vaults.AddVaultAsync("v", "/v");
+        var vault = (await fx.Vaults.GetVaultByPathAsync("/v"))!;
+        await fx.UpsertAsync(vaultId, [
             Note("/v/a/shared.md"),
             Note("/v/b/shared.md"),
         ]);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await IpcRequestExtensions.ResolveNotePathAsync("shared", vault, fixture.Db));
+            async () => await IpcRequestExtensions.ResolveNotePathAsync("shared", vault, fx.Notes));
     }
 
     [Fact]
     public async Task ResolveNotePathAsync_throws_when_bare_name_has_no_vault_in_scope()
     {
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            async () => await IpcRequestExtensions.ResolveNotePathAsync("today", vault: null, fixture.Db));
+            async () => await IpcRequestExtensions.ResolveNotePathAsync("today", vault: null, fx.Notes));
     }
 
     [Fact]
     public async Task ResolveNotePathAsync_create_mode_generates_path_inside_vault_root_without_db_lookup()
     {
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
         var vault = new VaultRecord(Id: 1, Name: "v", Path: OperatingSystem.IsWindows() ? @"C:\v" : "/v");
 
-        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("brand-new", vault, fixture.Db, NoteResolutionMode.Create);
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync("brand-new", vault, fx.Notes, NoteResolutionMode.Create);
 
         Assert.Equal(Path.GetFullPath(Path.Combine(vault.Path, "brand-new.md")), resolved);
     }
@@ -197,10 +197,10 @@ public class IpcRequestExtensionsTests
     [Fact]
     public async Task ResolveVaultAsync_returns_null_when_no_vault_args_supplied()
     {
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
         var r = Req();
 
-        var vault = await r.ResolveVaultAsync(fixture.Db);
+        var vault = await r.ResolveVaultAsync(fx.Vaults);
 
         Assert.Null(vault);
     }
@@ -208,20 +208,20 @@ public class IpcRequestExtensionsTests
     [Fact]
     public async Task ResolveVaultAsync_throws_when_named_vault_is_unknown()
     {
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
         var r = Req(("vault", "ghost"));
 
-        await Assert.ThrowsAsync<ArgumentException>(async () => await r.ResolveVaultAsync(fixture.Db));
+        await Assert.ThrowsAsync<ArgumentException>(async () => await r.ResolveVaultAsync(fx.Vaults));
     }
 
     [Fact]
     public async Task ResolveVaultAsync_returns_vault_when_name_matches()
     {
-        using var fixture = new IndexDbFixture();
-        await fixture.Db.AddVaultAsync("alpha", "/alpha");
+        using var fx = new TestDbFixture();
+        await fx.Vaults.AddVaultAsync("alpha", "/alpha");
         var r = Req(("vault", "alpha"));
 
-        var vault = await r.ResolveVaultAsync(fixture.Db);
+        var vault = await r.ResolveVaultAsync(fx.Vaults);
 
         Assert.NotNull(vault);
         Assert.Equal("alpha", vault!.Name);
@@ -230,40 +230,20 @@ public class IpcRequestExtensionsTests
     [Fact]
     public async Task ResolveVaultAsync_throws_when_path_is_unregistered_and_not_marked_optional()
     {
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
         var r = Req(("vaultPath", Path.GetFullPath("/no-such-place")));
 
-        await Assert.ThrowsAsync<ArgumentException>(async () => await r.ResolveVaultAsync(fixture.Db));
+        await Assert.ThrowsAsync<ArgumentException>(async () => await r.ResolveVaultAsync(fx.Vaults));
     }
 
     [Fact]
     public async Task ResolveVaultAsync_falls_back_to_global_when_vaultOptional_is_set()
     {
-        using var fixture = new IndexDbFixture();
+        using var fx = new TestDbFixture();
         var r = Req(("vaultPath", Path.GetFullPath("/no-such-place")), ("vaultOptional", "1"));
 
-        var vault = await r.ResolveVaultAsync(fixture.Db);
+        var vault = await r.ResolveVaultAsync(fx.Vaults);
 
         Assert.Null(vault);
-    }
-
-    private sealed class IndexDbFixture : IDisposable
-    {
-        private readonly string _root;
-        public IndexDb Db { get; }
-
-        public IndexDbFixture()
-        {
-            _root = Path.Combine(Path.GetTempPath(), "pumex-tests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(_root);
-            Db = new IndexDb(Path.Combine(_root, "index.db"));
-        }
-
-        public void Dispose()
-        {
-            Db.Dispose();
-            try { Directory.Delete(_root, recursive: true); }
-            catch { /* test cleanup is best-effort */ }
-        }
     }
 }

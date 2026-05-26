@@ -4,7 +4,7 @@ namespace Pumex.Daemon;
 
 public class VaultIndexingOrchestrator : BackgroundService
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
     private readonly IndexingServiceFactory _factory;
     private readonly ILogger<VaultIndexingOrchestrator> _logger;
 
@@ -17,18 +17,18 @@ public class VaultIndexingOrchestrator : BackgroundService
     private sealed record VaultRunner(IndexingService Service, Task Task, CancellationTokenSource Cts);
 
     public VaultIndexingOrchestrator(
-        IndexDb db,
+        IVaultRepository vaults,
         IndexingServiceFactory factory,
         ILogger<VaultIndexingOrchestrator> logger)
     {
-        _db = db;
+        _vaults = vaults;
         _factory = factory;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        foreach (var vault in await _db.GetVaultsAsync())
+        foreach (var vault in await _vaults.GetVaultsAsync())
             StartVault(vault);
 
         try { await Task.Delay(Timeout.Infinite, ct); }

@@ -35,8 +35,24 @@ try
         .UseSerilog()
         .ConfigureServices(s =>
         {
-            s.AddSingleton<IndexDb>(_ => new IndexDb(PumexPaths.IndexDb));
+            // IndexDbContext is the shared connection; IndexSchema applies pragmas,
+            // migration, and DDL once on first resolution.
+            s.AddSingleton<IndexDbContext>(_ =>
+            {
+                var ctx = new IndexDbContext(PumexPaths.IndexDb);
+                new IndexSchema(ctx).Apply();
+                return ctx;
+            });
+
+            // Repositories — order matters for the graph:
+            // VaultRepository depends on INoteRepository.
+            s.AddSingleton<INoteRepository, NoteRepository>();
+            s.AddSingleton<ILinkRepository, LinkRepository>();
+            s.AddSingleton<IVaultRepository, VaultRepository>();
+            s.AddSingleton<ISearchRepository, SearchRepository>();
+
             s.AddSingleton<NoteParser>();
+            s.AddSingleton<IInlineIndex, InlineIndex>();
             s.AddSingleton<IndexingServiceFactory>();
             s.AddSingleton<VaultIndexingOrchestrator>();
             s.AddHostedService(sp => sp.GetRequiredService<VaultIndexingOrchestrator>());

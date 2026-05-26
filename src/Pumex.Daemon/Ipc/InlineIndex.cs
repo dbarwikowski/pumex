@@ -5,15 +5,39 @@ namespace Pumex.Daemon.Ipc;
 /// the watcher's 200 ms debounce. The watcher will still fire on the same file
 /// shortly after, but the mtime-match short-circuit makes that a no-op.
 /// </summary>
-internal static class InlineIndex
+public interface IInlineIndex
 {
-    public static async Task UpsertAsync(IndexDb db, NoteParser parser, long vaultId, string path)
+    Task UpsertAsync(long vaultId, string path);
+    Task DeleteAsync(string path);
+}
+
+public class InlineIndex(
+    IndexDbContext context,
+    INoteRepository noteRepo,
+    ILinkRepository linkRepo,
+    NoteParser parser) : IInlineIndex
+{
+    public async Task UpsertAsync(long vaultId, string path)
     {
         if (!File.Exists(path)) return;
         try
         {
             var doc = parser.Parse(path);
-            await db.UpsertNotesAsync(vaultId, [doc]);
+            using var gate = await context.AcquireAsync();
+            using var tx = context.BeginTransaction();
+            try
+            {
+                var result = await noteRepo.UpsertCoreAsync(tx, vaultId, [doc]);
+                await linkRepo.DeleteLinksForNotesAsync(tx, result.Entries.Select(e => e.Id).ToList());
+                await linkRepo.InsertLinksAsync(tx, result.Links);
+                tx.Commit();
+                noteRepo.UpdateCacheUnsafe(result.Entries);
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
         }
         catch
         {
@@ -22,9 +46,9 @@ internal static class InlineIndex
         }
     }
 
-    public static async Task DeleteAsync(IndexDb db, string path)
+    public async Task DeleteAsync(string path)
     {
-        try { await db.DeleteNoteAsync(path); }
+        try { await noteRepo.DeleteNoteAsync(path); }
         catch { /* watcher will catch up; don't fail the delete */ }
     }
 }

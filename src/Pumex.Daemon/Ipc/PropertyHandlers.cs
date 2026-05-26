@@ -6,39 +6,49 @@ namespace Pumex.Daemon.Ipc;
 
 public class PropertyListHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
+    private readonly INoteRepository _notes;
 
     public string Command => "property:list";
 
-    public PropertyListHandler(IndexDb db) => _db = db;
+    public PropertyListHandler(IVaultRepository vaults, INoteRepository notes)
+    {
+        _vaults = vaults;
+        _notes = notes;
+    }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var vault = await request.ResolveVaultAsync(_db);
-        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
-        var noteId = await _db.GetNoteIdAsync(path)
+        var vault = await request.ResolveVaultAsync(_vaults);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes);
+        var noteId = await _notes.GetNoteIdAsync(path)
             ?? throw new FileNotFoundException($"Note not in index: {path}");
-        return await _db.GetPropertiesAsync(noteId);
+        return await _notes.GetPropertiesAsync(noteId);
     }
 }
 
 public class PropertyGetHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
+    private readonly INoteRepository _notes;
 
     public string Command => "property:get";
 
-    public PropertyGetHandler(IndexDb db) => _db = db;
+    public PropertyGetHandler(IVaultRepository vaults, INoteRepository notes)
+    {
+        _vaults = vaults;
+        _notes = notes;
+    }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var vault = await request.ResolveVaultAsync(_db);
-        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
+        var vault = await request.ResolveVaultAsync(_vaults);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes);
         var key = request.Require("key");
 
-        var noteId = await _db.GetNoteIdAsync(path)
+        var noteId = await _notes.GetNoteIdAsync(path)
             ?? throw new FileNotFoundException($"Note not in index: {path}");
-        return await _db.GetPropertyAsync(noteId, key)
+        return await _notes.GetPropertyAsync(noteId, key)
             ?? throw new KeyNotFoundException($"Property '{key}' not set on note");
     }
 }
@@ -50,21 +60,25 @@ public class PropertyGetHandler : ICommandHandler
 /// </summary>
 public class PropertySetHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
+    private readonly INoteRepository _notes;
+    private readonly IInlineIndex _inlineIndex;
     private readonly NoteParser _parser;
 
     public string Command => "property:set";
 
-    public PropertySetHandler(IndexDb db, NoteParser parser)
+    public PropertySetHandler(IVaultRepository vaults, INoteRepository notes, IInlineIndex inlineIndex, NoteParser parser)
     {
-        _db = db;
+        _vaults = vaults;
+        _notes = notes;
+        _inlineIndex = inlineIndex;
         _parser = parser;
     }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var vault = await request.ResolveVaultAsync(_db);
-        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
+        var vault = await request.ResolveVaultAsync(_vaults);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes);
         var key = request.Require("key");
         var value = request.Optional("value") ?? "";
 
@@ -79,7 +93,7 @@ public class PropertySetHandler : ICommandHandler
 
         var newContent = SerializeWithFrontmatter(frontmatter, body);
         await File.WriteAllTextAsync(path, newContent, ct);
-        if (vault is not null) await InlineIndex.UpsertAsync(_db, _parser, vault.Id, path);
+        if (vault is not null) await _inlineIndex.UpsertAsync(vault.Id, path);
         return new NotePathResult(path);
     }
 

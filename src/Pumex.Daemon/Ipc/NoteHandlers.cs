@@ -5,20 +5,22 @@ namespace Pumex.Daemon.Ipc;
 public class NoteReadHandler : ICommandHandler
 {
     private readonly NoteParser _parser;
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
+    private readonly INoteRepository _notes;
 
     public string Command => "note:read";
 
-    public NoteReadHandler(NoteParser parser, IndexDb db)
+    public NoteReadHandler(NoteParser parser, IVaultRepository vaults, INoteRepository notes)
     {
         _parser = parser;
-        _db = db;
+        _vaults = vaults;
+        _notes = notes;
     }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var vault = await request.ResolveVaultAsync(_db);
-        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
+        var vault = await request.ResolveVaultAsync(_vaults);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes);
         if (!File.Exists(path))
             throw new FileNotFoundException($"Note not found: {path}");
 
@@ -50,22 +52,26 @@ public class NoteReadHandler : ICommandHandler
 
 public class NoteCreateHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
+    private readonly INoteRepository _notes;
+    private readonly IInlineIndex _inlineIndex;
     private readonly NoteParser _parser;
 
     public string Command => "note:create";
 
-    public NoteCreateHandler(IndexDb db, NoteParser parser)
+    public NoteCreateHandler(IVaultRepository vaults, INoteRepository notes, IInlineIndex inlineIndex, NoteParser parser)
     {
-        _db = db;
+        _vaults = vaults;
+        _notes = notes;
+        _inlineIndex = inlineIndex;
         _parser = parser;
     }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var vault = await request.ResolveVaultAsync(_db);
+        var vault = await request.ResolveVaultAsync(_vaults);
         var path = await IpcRequestExtensions.ResolveNotePathAsync(
-            request.Require("path"), vault, _db, NoteResolutionMode.Create);
+            request.Require("path"), vault, _notes, NoteResolutionMode.Create);
         var content = request.Optional("content") ?? "";
 
         if (File.Exists(path))
@@ -75,28 +81,30 @@ public class NoteCreateHandler : ICommandHandler
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
         await File.WriteAllTextAsync(path, content, ct);
-        if (vault is not null) await InlineIndex.UpsertAsync(_db, _parser, vault.Id, path);
+        if (vault is not null) await _inlineIndex.UpsertAsync(vault.Id, path);
         return new NotePathResult(path);
     }
 }
 
 public class NoteAppendHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
-    private readonly NoteParser _parser;
+    private readonly IVaultRepository _vaults;
+    private readonly INoteRepository _notes;
+    private readonly IInlineIndex _inlineIndex;
 
     public string Command => "note:append";
 
-    public NoteAppendHandler(IndexDb db, NoteParser parser)
+    public NoteAppendHandler(IVaultRepository vaults, INoteRepository notes, IInlineIndex inlineIndex)
     {
-        _db = db;
-        _parser = parser;
+        _vaults = vaults;
+        _notes = notes;
+        _inlineIndex = inlineIndex;
     }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var vault = await request.ResolveVaultAsync(_db);
-        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
+        var vault = await request.ResolveVaultAsync(_vaults);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes);
         var content = request.Optional("content") ?? "";
         var inline = request.Flag("inline");
 
@@ -109,44 +117,56 @@ public class NoteAppendHandler : ICommandHandler
         var suffix = content.EndsWith('\n') ? "" : "\n";
 
         await File.AppendAllTextAsync(path, prefix + content + suffix, ct);
-        if (vault is not null) await InlineIndex.UpsertAsync(_db, _parser, vault.Id, path);
+        if (vault is not null) await _inlineIndex.UpsertAsync(vault.Id, path);
         return new NotePathResult(path);
     }
 }
 
 public class NoteListHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
+    private readonly INoteRepository _notes;
 
     public string Command => "note:list";
 
-    public NoteListHandler(IndexDb db) => _db = db;
+    public NoteListHandler(IVaultRepository vaults, INoteRepository notes)
+    {
+        _vaults = vaults;
+        _notes = notes;
+    }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var vault = await request.ResolveVaultAsync(_db);
-        return await _db.ListNotesAsync(vault?.Id);
+        var vault = await request.ResolveVaultAsync(_vaults);
+        return await _notes.ListNotesAsync(vault?.Id);
     }
 }
 
 public class NoteDeleteHandler : ICommandHandler
 {
-    private readonly IndexDb _db;
+    private readonly IVaultRepository _vaults;
+    private readonly INoteRepository _notes;
+    private readonly IInlineIndex _inlineIndex;
 
     public string Command => "note:delete";
 
-    public NoteDeleteHandler(IndexDb db) => _db = db;
+    public NoteDeleteHandler(IVaultRepository vaults, INoteRepository notes, IInlineIndex inlineIndex)
+    {
+        _vaults = vaults;
+        _notes = notes;
+        _inlineIndex = inlineIndex;
+    }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
-        var vault = await request.ResolveVaultAsync(_db);
-        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _db);
+        var vault = await request.ResolveVaultAsync(_vaults);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes);
 
         if (!File.Exists(path))
             throw new FileNotFoundException($"Note not found: {path}");
 
         File.Delete(path);
-        await InlineIndex.DeleteAsync(_db, path);
+        await _inlineIndex.DeleteAsync(path);
         return new NotePathResult(path);
     }
 }
