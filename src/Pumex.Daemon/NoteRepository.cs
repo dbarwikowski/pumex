@@ -291,10 +291,16 @@ public class NoteRepository(IndexDbContext context) : INoteRepository
     }
 
     /// <inheritdoc/>
+    public void EvictUnsafe(IReadOnlyList<string> paths, IReadOnlyList<long> ids)
+    {
+        foreach (var p in paths) _pathToId.Remove(p);
+        foreach (var id in ids) _idToPath.Remove(id);
+    }
+
+    /// <inheritdoc/>
     public async Task EvictAsync(IReadOnlyList<string> paths, IReadOnlyList<long> ids)
     {
         using var _ = await context.AcquireAsync();
-        foreach (var p in paths) _pathToId.Remove(p);
-        foreach (var id in ids) _idToPath.Remove(id);
+        EvictUnsafe(paths, ids);
     }
 }

@@ -54,29 +54,28 @@ public class VaultRepository(IndexDbContext context, INoteRepository notes) : IV
 
     public async Task RemoveVaultAsync(long vaultId)
     {
-        // Query paths and IDs to evict from the note cache, then delete.
-        // Gate is held only for the DB work; cache eviction uses its own gate.
-        List<(long Id, string Path)> toEvict;
+        // Hold the gate for the full operation: collect note IDs/paths, delete
+        // from DB, then evict the cache — all before releasing. This closes the
+        // race window where a concurrent GetNoteIdAsync could still return a
+        // deleted note between the DB DELETE and the cache eviction.
+        using var _ = await context.AcquireAsync();
+        var toEvict = new List<(long Id, string Path)>();
+        using (var q = context.Command(
+            "SELECT id, path FROM notes WHERE vault_id = @vaultId",
+            ("@vaultId", vaultId)))
         {
-            using var _ = await context.AcquireAsync();
-            toEvict = new List<(long, string)>();
-            using (var q = context.Command(
-                "SELECT id, path FROM notes WHERE vault_id = @vaultId",
-                ("@vaultId", vaultId)))
-            {
-                using var reader = await q.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
-                    toEvict.Add((reader.GetInt64(0), reader.GetString(1)));
-            }
-            // FK ON DELETE CASCADE on notes(vault_id) takes the rest with it (tags,
-            // properties, links). FTS rowids are purged by the
-            // notes_fts_purge_after_delete trigger as the cascade fires.
-            await context.ExecuteAsync("DELETE FROM vaults WHERE id = @id", ("@id", vaultId));
+            using var reader = await q.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                toEvict.Add((reader.GetInt64(0), reader.GetString(1)));
         }
+        // FK ON DELETE CASCADE on notes(vault_id) takes the rest with it (tags,
+        // properties, links). FTS rowids are purged by the
+        // notes_fts_purge_after_delete trigger as the cascade fires.
+        await context.ExecuteAsync("DELETE FROM vaults WHERE id = @id", ("@id", vaultId));
 
-        // Evict stale path↔id cache entries after the transaction is committed.
+        // Evict stale path↔id cache entries while still holding the gate.
         if (toEvict.Count > 0)
-            await notes.EvictAsync(
+            notes.EvictUnsafe(
                 toEvict.Select(x => x.Path).ToList(),
                 toEvict.Select(x => x.Id).ToList());
     }

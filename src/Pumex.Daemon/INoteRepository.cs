@@ -31,6 +31,12 @@ public interface INoteRepository
     void UpdateCacheUnsafe(IReadOnlyList<(string Path, long Id)> entries);
 
     /// <summary>
+    /// Removes entries from the in-memory cache while the caller already holds
+    /// the gate. Must NOT be called without holding the gate.
+    /// </summary>
+    void EvictUnsafe(IReadOnlyList<string> paths, IReadOnlyList<long> ids);
+
+    /// <summary>
     /// Removes entries from the in-memory cache after a vault deletion. Acquires
     /// its own gate internally — do not call while holding the gate.
     /// </summary>

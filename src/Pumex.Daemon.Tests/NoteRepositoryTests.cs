@@ -228,7 +228,7 @@ public class NoteRepositoryTests : IDisposable
                 seed.ExecuteNonQuery();
             }
 
-            var ctx = new IndexDbContext(legacyDbPath);
+            using var ctx = new IndexDbContext(legacyDbPath);
             new IndexSchema(ctx).Apply();
 
             using var check = new SqliteConnection($"Data Source={legacyDbPath}");
@@ -241,8 +241,6 @@ public class NoteRepositoryTests : IDisposable
             using var mtimeCmd = check.CreateCommand();
             mtimeCmd.CommandText = "SELECT mtime FROM notes WHERE id = 1";
             Assert.Equal(0L, (long)mtimeCmd.ExecuteScalar()!);
-
-            ctx.Dispose();
         }
         finally
         {

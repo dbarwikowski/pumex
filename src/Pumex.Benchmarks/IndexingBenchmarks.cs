@@ -36,16 +36,27 @@ public class ColdFullScanBenchmarks
     {
         var dbPath = Path.Combine(_dbDir, $"cold-{Guid.NewGuid():N}.db");
         var ctx = new IndexDbContext(dbPath);
-        new IndexSchema(ctx).Apply();
-        var notes = new NoteRepository(ctx);
-        var links = new LinkRepository(ctx);
-        var vaults = new VaultRepository(ctx, notes);
+        try
+        {
+            new IndexSchema(ctx).Apply();
+            var notes = new NoteRepository(ctx);
+            var links = new LinkRepository(ctx);
+            var vaults = new VaultRepository(ctx, notes);
 
-        await vaults.AddVaultAsync("bench", _vaultRoot);
-        var vault = (await vaults.GetVaultByPathAsync(_vaultRoot))!;
+            await vaults.AddVaultAsync("bench", _vaultRoot);
+            var vault = (await vaults.GetVaultByPathAsync(_vaultRoot))!;
 
-        await IndexingBench.RunInitialScanAsync(ctx, notes, links, vault);
-        ctx.Dispose();
+            await IndexingBench.RunInitialScanAsync(ctx, notes, links, vault);
+        }
+        finally
+        {
+            ctx.Dispose();
+            // Remove the per-invocation DB files so later iterations don't pay
+            // for accumulated temp-file filesystem churn.
+            try { File.Delete(dbPath); } catch { }
+            try { File.Delete(dbPath + "-wal"); } catch { }
+            try { File.Delete(dbPath + "-shm"); } catch { }
+        }
     }
 }
 
@@ -62,7 +73,10 @@ public class WarmFullScanBenchmarks
 
     private string _vaultRoot = null!;
     private string _dbDir = null!;
-    private string _dbPath = null!;
+    private IndexDbContext _ctx = null!;
+    private INoteRepository _notes = null!;
+    private ILinkRepository _links = null!;
+    private VaultRecord _vault = default!;
 
     [GlobalSetup]
     public async Task Setup()
@@ -70,23 +84,23 @@ public class WarmFullScanBenchmarks
         _vaultRoot = BenchmarkVaultBuilder.Build(VaultSize);
         _dbDir = Path.Combine(Path.GetTempPath(), "pumex-bench-db-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dbDir);
-        _dbPath = Path.Combine(_dbDir, "warm.db");
+        var dbPath = Path.Combine(_dbDir, "warm.db");
 
-        var ctx = new IndexDbContext(_dbPath);
-        new IndexSchema(ctx).Apply();
-        var notes = new NoteRepository(ctx);
-        var links = new LinkRepository(ctx);
-        var vaults = new VaultRepository(ctx, notes);
+        _ctx = new IndexDbContext(dbPath);
+        new IndexSchema(_ctx).Apply();
+        _notes = new NoteRepository(_ctx);
+        _links = new LinkRepository(_ctx);
+        var vaults = new VaultRepository(_ctx, _notes);
 
         await vaults.AddVaultAsync("bench", _vaultRoot);
-        var vault = (await vaults.GetVaultByPathAsync(_vaultRoot))!;
-        await IndexingBench.RunInitialScanAsync(ctx, notes, links, vault);
-        ctx.Dispose();
+        _vault = (await vaults.GetVaultByPathAsync(_vaultRoot))!;
+        await IndexingBench.RunInitialScanAsync(_ctx, _notes, _links, _vault);
     }
 
     [GlobalCleanup]
     public void Cleanup()
     {
+        _ctx?.Dispose();
         BenchmarkVaultBuilder.Cleanup(_vaultRoot);
         try { Directory.Delete(_dbDir, recursive: true); } catch { }
     }
@@ -94,15 +108,7 @@ public class WarmFullScanBenchmarks
     [Benchmark]
     public async Task WarmFullScan()
     {
-        var ctx = new IndexDbContext(_dbPath);
-        new IndexSchema(ctx).Apply();
-        var notes = new NoteRepository(ctx);
-        var links = new LinkRepository(ctx);
-        var vaults = new VaultRepository(ctx, notes);
-
-        var vault = (await vaults.GetVaultByPathAsync(_vaultRoot))!;
-        await IndexingBench.RunInitialScanAsync(ctx, notes, links, vault);
-        ctx.Dispose();
+        await IndexingBench.RunInitialScanAsync(_ctx, _notes, _links, _vault);
     }
 }
 

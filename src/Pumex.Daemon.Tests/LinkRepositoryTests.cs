@@ -8,15 +8,15 @@ public class LinkRepositoryTests : IDisposable
 
     public void Dispose() => _fx.Dispose();
 
-    private static NoteDocument Note(string path, IEnumerable<string>? outgoing = null) => new(
+    private static NoteDocument Note(string path, string body = "", IEnumerable<string>? outgoing = null) => new(
         Path: path,
         Frontmatter: new Dictionary<string, object>(),
         Tags: [],
         OutgoingLinks: (outgoing ?? []).ToList(),
-        Content: "",
-        RawContent: "",
+        Content: body,
+        RawContent: body,
         Mtime: 1,
-        Size: 0);
+        Size: body.Length);
 
     [Fact]
     public async Task GetBacklinksAsync_returns_resolved_sources()
@@ -82,7 +82,7 @@ public class LinkRepositoryTests : IDisposable
         // Regression: corrupt FTS doclist after cascade DELETE from vaults.
         var vaultId = await _fx.Vaults.AddVaultAsync("doomed", "/doomed");
         var notes = Enumerable.Range(0, 25)
-            .Select(i => Note($"/doomed/n{i}.md"))
+            .Select(i => Note($"/doomed/n{i}.md", body: $"seed body {i} doomed"))
             .ToList();
         await _fx.UpsertAsync(vaultId, notes);
 

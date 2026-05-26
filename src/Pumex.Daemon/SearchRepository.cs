@@ -15,8 +15,9 @@ public class SearchRepository(IndexDbContext context) : ISearchRepository
         // optional vault scope, AND-semantics tag and property filters.
         // Snippet builder gets the original query (or null) and falls back to
         // the first non-empty body line when there's nothing to substring-match.
-        using var _ = await context.AcquireAsync();
-
+        //
+        // Gate is released before BuildSnippet so synchronous disk reads do not
+        // block other repository operations behind the single-connection semaphore.
         var hasQuery = !string.IsNullOrWhiteSpace(query);
         var sql = new System.Text.StringBuilder();
         var parameters = new List<(string, object)>();
@@ -72,14 +73,18 @@ public class SearchRepository(IndexDbContext context) : ISearchRepository
         sql.Append(" LIMIT @limit");
         parameters.Add(("@limit", limit));
 
-        var matches = new List<(string Path, string Name)>();
-        using (var cmd = context.Command(sql.ToString(), parameters.ToArray()))
+        List<(string Path, string Name)> matches;
         {
+            using var _ = await context.AcquireAsync();
+            matches = new List<(string Path, string Name)>();
+            using var cmd = context.Command(sql.ToString(), parameters.ToArray());
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
                 matches.Add((reader.GetString(0), reader.GetString(1)));
         }
 
+        // Gate is released above; BuildSnippet reads files from disk and must
+        // not run while the connection semaphore is held.
         return matches
             .Select(m => new SearchResult(m.Path, m.Name, BuildSnippet(m.Path, query)))
             .ToList();
