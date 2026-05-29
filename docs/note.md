@@ -221,7 +221,7 @@ Displays a table of all indexed notes with their name, format, path, and last-mo
 
 ### Output
 
-```
+```text
  Name             │ Format │ Path                          │       Modified
  ─────────────────┼────────┼───────────────────────────────┼────────────────────
  architecture     │ md     │ C:\notes\work\architecture.md │ 2026-05-09 14:22

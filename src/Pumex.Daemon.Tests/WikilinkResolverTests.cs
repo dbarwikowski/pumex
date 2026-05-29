@@ -121,4 +121,18 @@ public class WikilinkResolverTests
         // [[data.csv]] must not resolve to data.md
         Assert.Null(resolver.Resolve("data.csv", sourcePath: Path.Combine("vault", "src.md")));
     }
+
+    [Fact]
+    public void Dotted_markdown_filename_resolves_via_bare_name()
+    {
+        // Path.GetExtension("2024.05.20") is ".20", which looks like an explicit
+        // extension — but the real file is a Markdown daily note 2024.05.20.md.
+        var resolver = new WikilinkResolver();
+        var daily = Path.Combine("vault", "daily", "2024.05.20.md");
+        resolver.Rebuild(new[] { daily });
+
+        var src = Path.Combine("vault", "src.md");
+        Assert.Equal(daily, resolver.Resolve("2024.05.20", src));
+        Assert.Equal(daily, resolver.Resolve(Path.Combine("daily", "2024.05.20"), src));
+    }
 }

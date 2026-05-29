@@ -14,19 +14,21 @@ and gain richer parsing/rendering over time.
 
 A vault's `.pumex/config.json` controls which extensions are indexed:
 
-```jsonc
+```json
 {
   "name": "my-vault",
   "created": "2026-05-29T12:00:00+00:00",
   "version": 1,
-
-  // Extra extensions to index. Markdown is ALWAYS indexed and need not be listed.
   "formats": ["csv", "json", "yaml"],
-
-  // Glob excludes, applied to every format (including Markdown).
   "ignore": ["templates/**", "*.tmp.md"]
 }
 ```
+
+- `formats` — extra extensions to index. Markdown is **always** indexed and need not be listed.
+- `ignore` — glob excludes, applied to every format (including Markdown).
+
+> The config is parsed as **strict JSON** (`System.Text.Json`): comments and
+> trailing commas are not supported.
 
 - **Markdown is always on.** `formats` only adds extras. A missing or older
   config indexes Markdown only — exactly the previous behaviour.

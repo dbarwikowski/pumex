@@ -65,16 +65,19 @@ internal static class IpcRequestExtensions
         NoteResolutionMode mode = NoteResolutionMode.Existing,
         bool allowNonMarkdown = false)
     {
-        if (Path.IsPathFullyQualified(rawPath))
-            return Path.GetFullPath(rawPath);
-
         var ext = Path.GetExtension(rawPath);
         var isMarkdownExt = ext.Equals(".md", StringComparison.OrdinalIgnoreCase);
         var hasNonMarkdownExt = ext.Length > 0 && !isMarkdownExt;
 
+        // Guard before the absolute-path shortcut, otherwise a fully-qualified
+        // non-Markdown path (e.g. C:\vault\data.csv) would bypass the check and
+        // let write commands touch non-Markdown files.
         if (hasNonMarkdownExt && !allowNonMarkdown)
             throw new InvalidOperationException(
                 $"'{rawPath}' is not a Markdown note; only Markdown notes can be created or modified.");
+
+        if (Path.IsPathFullyQualified(rawPath))
+            return Path.GetFullPath(rawPath);
 
         var hasSeparator = rawPath.Contains('/') || rawPath.Contains('\\');
         if (hasSeparator)

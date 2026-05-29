@@ -184,6 +184,53 @@ public class IpcRequestExtensionsTests
         Assert.Equal(Path.GetFullPath(Path.Combine(vault.Path, "brand-new.md")), resolved);
     }
 
+    [Fact]
+    public async Task ResolveNotePathAsync_rejects_non_markdown_for_writes()
+    {
+        using var fx = new TestDbFixture();
+        var vault = new VaultRecord(Id: 1, Name: "v", Path: OperatingSystem.IsWindows() ? @"C:\v" : "/v");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await IpcRequestExtensions.ResolveNotePathAsync("data.csv", vault, fx.Notes));
+    }
+
+    [Fact]
+    public async Task ResolveNotePathAsync_rejects_absolute_non_markdown_for_writes()
+    {
+        // A fully-qualified non-Markdown path must not slip past the guard.
+        using var fx = new TestDbFixture();
+        var raw = OperatingSystem.IsWindows() ? @"C:\v\data.csv" : "/v/data.csv";
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await IpcRequestExtensions.ResolveNotePathAsync(raw, vault: null, fx.Notes));
+    }
+
+    [Fact]
+    public async Task ResolveNotePathAsync_allows_absolute_non_markdown_when_allowNonMarkdown()
+    {
+        using var fx = new TestDbFixture();
+        var raw = OperatingSystem.IsWindows() ? @"C:\v\data.csv" : "/v/data.csv";
+
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync(
+            raw, vault: null, fx.Notes, allowNonMarkdown: true);
+
+        Assert.Equal(Path.GetFullPath(raw), resolved);
+    }
+
+    [Fact]
+    public async Task ResolveNotePathAsync_resolves_non_markdown_by_filename_when_allowed()
+    {
+        using var fx = new TestDbFixture();
+        var vaultId = await fx.Vaults.AddVaultAsync("v", "/v");
+        var vault = (await fx.Vaults.GetVaultByPathAsync("/v"))!;
+        await fx.UpsertAsync(vaultId, [Note("/v/data/animals.csv")]);
+
+        var resolved = await IpcRequestExtensions.ResolveNotePathAsync(
+            "animals.csv", vault, fx.Notes, allowNonMarkdown: true);
+
+        Assert.Equal("/v/data/animals.csv", resolved);
+    }
+
     private static NoteDocument Note(string path) => new(
         Path: path,
         Frontmatter: new Dictionary<string, object>(),

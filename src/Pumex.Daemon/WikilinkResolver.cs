@@ -58,9 +58,15 @@ public class WikilinkResolver
         var normalized = linkText.Replace('\\', '/');
 
         // Explicit extension ([[data.csv]], [[folder/data.csv]], [[note.md]]):
-        // match the real filename/path suffix exactly — no .md fallback.
+        // match the real filename/path suffix exactly. On a miss, fall through to
+        // bare-name resolution — a dotted Markdown filename like 2024.05.20 also
+        // "has an extension" (.20) per Path.GetExtension, yet must resolve to
+        // 2024.05.20.md.
         if (!string.IsNullOrEmpty(Path.GetExtension(normalized)))
-            return Nearest(_pathSuffixIndex.GetValueOrDefault(normalized), sourcePath);
+        {
+            var explicitHit = Nearest(_pathSuffixIndex.GetValueOrDefault(normalized), sourcePath);
+            if (explicitHit is not null) return explicitHit;
+        }
 
         // Bare name — Markdown only.
         // 1. Path-qualified [[folder/Note]] → folder/Note.md

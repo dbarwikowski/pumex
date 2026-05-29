@@ -13,7 +13,7 @@ pumex search [<query>] [--tag TAG]... [--property k=v]... [--format EXT]...
 
 | Argument | Description |
 |---|---|
-| `query` | FTS5 full-text query. Optional when `--tag` or `--property` filters are given. |
+| `query` | FTS5 full-text query. Optional when `--tag`, `--property`, or `--format` filters are given. |
 
 ## Flags
 

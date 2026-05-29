@@ -112,18 +112,18 @@ When no scope flag is given, the vault is auto-discovered by walking up from the
 
 Markdown is always indexed. A vault can opt into additional plain-text formats (CSV, JSON, YAML, …) via its `.pumex/config.json`:
 
-```jsonc
+```json
 {
-  "formats": ["csv", "json"],            // extra extensions to index (Markdown is always on)
-  "ignore": ["templates/**", "*.tmp.md"] // glob excludes, applied to every format
+  "formats": ["csv", "json"],
+  "ignore": ["templates/**", "*.tmp.md"]
 }
 ```
 
-Editing the config is picked up live — enabling a format indexes its files, disabling one removes them. Non-Markdown files are full-text searchable and can be linked as targets from notes with an explicit extension (`[[data.csv]]`); a bare `[[data]]` still means `data.md`. Filter with `--format`/`--ext` on `search` and `list`. Full details: [`docs/formats.md`](docs/formats.md).
+`formats` adds extra extensions (Markdown is always on); `ignore` is glob excludes applied to every format. The config is parsed as strict JSON — comments and trailing commas are not supported. Editing the config is picked up live — enabling a format indexes its files, disabling one removes them. Non-Markdown files are full-text searchable and can be linked as targets from notes with an explicit extension (`[[data.csv]]`); a bare `[[data]]` still means `data.md`. Filter with `--format`/`--ext` on `search` and `list`. Full details: [`docs/formats.md`](docs/formats.md).
 
 ## How it works
 
-```
+```text
 pumex (CLI)  ──named pipe──►  pumex-daemon (background)
                                     │
                                SQLite FTS5 index
