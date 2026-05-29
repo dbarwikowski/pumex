@@ -26,7 +26,7 @@ pumex read <note> [--raw] [--vault NAME | --vault-path PATH]
 
 | Argument | Description |
 |---|---|
-| `note` | Absolute path, relative path, or bare note name. |
+| `note` | Absolute path, relative path, or bare note name. A bare name resolves to `<name>.md`; non-Markdown files require an explicit extension (e.g. `data.csv`). See [Text formats](formats.md). |
 
 ### Flags
 
@@ -42,7 +42,7 @@ Reads and displays the note. Without `--raw`:
 
 - Frontmatter properties are shown in a table.
 - Inline tags are shown as `#tag` labels.
-- The body is rendered as Markdown: headings, tables, code blocks, bold/italic, lists, blockquotes, and thematic breaks.
+- The body is rendered by format: Markdown gets headings, tables, code blocks, bold/italic, lists, blockquotes, and thematic breaks. Other formats are printed as raw text until a dedicated renderer ships.
 
 With `--raw`, the file is printed exactly as stored on disk, including frontmatter delimiters.
 
@@ -57,6 +57,9 @@ pumex read architecture --raw
 
 # Read a note by path
 pumex read ./docs/architecture.md
+
+# Read a non-Markdown file (extension required; printed raw)
+pumex read data.csv
 ```
 
 ---
@@ -200,28 +203,29 @@ List all notes in a vault.
 ### Synopsis
 
 ```
-pumex list [--vault NAME | --vault-path PATH | --all]
+pumex list [--format EXT]... [--vault NAME | --vault-path PATH | --all]
 ```
 
 ### Flags
 
 | Flag | Description |
 |---|---|
+| `--format EXT` / `--ext EXT` | List only notes of a file format/extension (e.g. `md`, `csv`). Repeatable; comma-separated accepted. See [Text formats](formats.md). |
 | `--vault NAME` | List notes from the named vault. |
 | `--vault-path PATH` | List notes from the vault at this path. |
 | `--all` | List notes across all registered vaults. |
 
 ### Description
 
-Displays a table of all indexed notes with their name, path, and last-modified time.
+Displays a table of all indexed notes with their name, format, path, and last-modified time.
 
 ### Output
 
-```
- Name             │ Path                          │       Modified
- ─────────────────┼───────────────────────────────┼────────────────────
- architecture     │ C:\notes\work\architecture.md │ 2026-05-09 14:22
- meeting-2026-05  │ C:\notes\work\meeting-...md   │ 2026-05-09 11:05
+```text
+ Name             │ Format │ Path                          │       Modified
+ ─────────────────┼────────┼───────────────────────────────┼────────────────────
+ architecture     │ md     │ C:\notes\work\architecture.md │ 2026-05-09 14:22
+ dataset          │ csv    │ C:\notes\work\dataset.csv     │ 2026-05-09 11:05
 ```
 
 ### Examples
@@ -230,6 +234,9 @@ Displays a table of all indexed notes with their name, path, and last-modified t
 pumex list
 pumex list --vault work
 pumex list --all
+
+# Only CSV files (format must be enabled for the vault)
+pumex list --format csv
 ```
 
 ## See also
@@ -237,3 +244,4 @@ pumex list --all
 - [`pumex search`](search.md) — search notes by content, tag, or property
 - [`pumex prop`](property.md) — read and write frontmatter properties
 - [`pumex daily`](daily.md) — daily notes
+- [Text formats](formats.md) — indexing and reading non-Markdown files

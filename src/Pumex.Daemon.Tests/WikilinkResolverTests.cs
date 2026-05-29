@@ -80,4 +80,59 @@ public class WikilinkResolverTests
         Assert.Equal(path, resolver.Resolve("mixed-case", sourcePath: Path.Combine("vault", "src.md")));
         Assert.Equal(path, resolver.Resolve("MIXED-CASE", sourcePath: Path.Combine("vault", "src.md")));
     }
+
+    [Fact]
+    public void Bare_link_resolves_to_markdown_only_never_to_a_non_markdown_sibling()
+    {
+        var resolver = new WikilinkResolver();
+        var md = Path.Combine("vault", "data.md");
+        var csv = Path.Combine("vault", "data.csv");
+        resolver.Rebuild(new[] { md, csv });
+
+        Assert.Equal(md, resolver.Resolve("data", sourcePath: Path.Combine("vault", "src.md")));
+    }
+
+    [Fact]
+    public void Non_markdown_file_is_not_resolvable_by_bare_name()
+    {
+        var resolver = new WikilinkResolver();
+        resolver.Rebuild(new[] { Path.Combine("vault", "data.csv") });
+
+        Assert.Null(resolver.Resolve("data", sourcePath: Path.Combine("vault", "src.md")));
+    }
+
+    [Fact]
+    public void Explicit_extension_resolves_a_non_markdown_target()
+    {
+        var resolver = new WikilinkResolver();
+        var csv = Path.Combine("vault", "sub", "data.csv");
+        resolver.Rebuild(new[] { csv });
+
+        Assert.Equal(csv, resolver.Resolve("data.csv", sourcePath: Path.Combine("vault", "src.md")));
+        Assert.Equal(csv, resolver.Resolve(Path.Combine("sub", "data.csv"), sourcePath: Path.Combine("vault", "src.md")));
+    }
+
+    [Fact]
+    public void Explicit_extension_does_not_fall_back_to_markdown()
+    {
+        var resolver = new WikilinkResolver();
+        resolver.Rebuild(new[] { Path.Combine("vault", "data.md") });
+
+        // [[data.csv]] must not resolve to data.md
+        Assert.Null(resolver.Resolve("data.csv", sourcePath: Path.Combine("vault", "src.md")));
+    }
+
+    [Fact]
+    public void Dotted_markdown_filename_resolves_via_bare_name()
+    {
+        // Path.GetExtension("2024.05.20") is ".20", which looks like an explicit
+        // extension — but the real file is a Markdown daily note 2024.05.20.md.
+        var resolver = new WikilinkResolver();
+        var daily = Path.Combine("vault", "daily", "2024.05.20.md");
+        resolver.Rebuild(new[] { daily });
+
+        var src = Path.Combine("vault", "src.md");
+        Assert.Equal(daily, resolver.Resolve("2024.05.20", src));
+        Assert.Equal(daily, resolver.Resolve(Path.Combine("daily", "2024.05.20"), src));
+    }
 }

@@ -7,14 +7,14 @@ public class IndexingServiceFactory
     private readonly IndexDbContext _context;
     private readonly INoteRepository _noteRepo;
     private readonly ILinkRepository _linkRepo;
-    private readonly NoteParser _parser;
+    private readonly FormatParserRegistry _parser;
     private readonly ILogger<IndexingService> _logger;
 
     public IndexingServiceFactory(
         IndexDbContext context,
         INoteRepository noteRepo,
         ILinkRepository linkRepo,
-        NoteParser parser,
+        FormatParserRegistry parser,
         ILogger<IndexingService> logger)
     {
         _context = context;

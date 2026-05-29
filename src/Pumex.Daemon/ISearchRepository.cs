@@ -9,5 +9,6 @@ public interface ISearchRepository
         int limit = 50,
         long? vaultId = null,
         IReadOnlyList<string>? tags = null,
-        IReadOnlyList<KeyValuePair<string, string>>? properties = null);
+        IReadOnlyList<KeyValuePair<string, string>>? properties = null,
+        IReadOnlyList<string>? formats = null);
 }

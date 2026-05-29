@@ -9,7 +9,8 @@ public class SearchRepository(IndexDbContext context) : ISearchRepository
         int limit = 50,
         long? vaultId = null,
         IReadOnlyList<string>? tags = null,
-        IReadOnlyList<KeyValuePair<string, string>>? properties = null)
+        IReadOnlyList<KeyValuePair<string, string>>? properties = null,
+        IReadOnlyList<string>? formats = null)
     {
         // Build SQL incrementally: FTS join only when query is non-empty,
         // optional vault scope, AND-semantics tag and property filters.
@@ -68,6 +69,8 @@ public class SearchRepository(IndexDbContext context) : ISearchRepository
                 parameters.Add((pv, properties[i].Value));
             }
         }
+
+        NoteRepository.AppendFormatFilter(sql, parameters, formats, "n.format");
 
         sql.Append(hasQuery ? " ORDER BY rank" : " ORDER BY n.mtime DESC");
         sql.Append(" LIMIT @limit");

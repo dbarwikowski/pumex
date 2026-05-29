@@ -35,7 +35,7 @@ public class OrchestratorTests : IDisposable
     private VaultIndexingOrchestrator BuildOrchestrator() =>
         new(_vaults,
             new IndexingServiceFactory(
-                _context, _notes, _links, new NoteParser(),
+                _context, _notes, _links, FormatParserRegistry.Default(),
                 NullLogger<IndexingService>.Instance),
             NullLogger<VaultIndexingOrchestrator>.Instance);
 

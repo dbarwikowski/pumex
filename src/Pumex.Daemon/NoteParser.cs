@@ -4,8 +4,11 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace Pumex.Daemon;
 
-public partial class NoteParser
+public partial class NoteParser : IFormatParser
 {
+    private static readonly string[] HandledExtensions = [".md"];
+    public IReadOnlyCollection<string> Extensions => HandledExtensions;
+
     // Build the YAML deserializer once. DeserializerBuilder.Build() is heavy —
     // benchmarks at 10k notes traced ~70 % of cold-scan allocations to per-call
     // construction. The IDeserializer is documented thread-safe for read-only

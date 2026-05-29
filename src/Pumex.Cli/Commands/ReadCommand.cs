@@ -50,7 +50,7 @@ internal static class ReadCommand
         if (content.Tags.Count > 0)
             AnsiConsole.MarkupLine("[dim]tags:[/] " + string.Join(" ", content.Tags.Select(t => $"[blue]#{t.EscapeMarkup()}[/]")));
         AnsiConsole.WriteLine();
-        MarkdownRenderer.Render(content.Body);
+        DocumentRenderer.Render(content.Path, content.Body);
         return 0;
     }
 }

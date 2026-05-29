@@ -73,7 +73,7 @@ public class IpcServerTests
         ]);
 
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Vaults, fixture.Notes)));
+            handlers => handlers.Add(new NoteReadHandler(FormatParserRegistry.Default(), fixture.Vaults, fixture.Notes)));
 
         var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
         {
@@ -93,7 +93,7 @@ public class IpcServerTests
         await fixture.UpsertAsync(fixture.Vault.Id, [ParseFrom(path)]);
 
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Vaults, fixture.Notes)));
+            handlers => handlers.Add(new NoteReadHandler(FormatParserRegistry.Default(), fixture.Vaults, fixture.Notes)));
 
         var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
         {
@@ -113,7 +113,7 @@ public class IpcServerTests
         await fixture.UpsertAsync(fixture.Vault.Id, [ParseFrom(path)]);
 
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Vaults, fixture.Notes)));
+            handlers => handlers.Add(new NoteReadHandler(FormatParserRegistry.Default(), fixture.Vaults, fixture.Notes)));
 
         var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
         {
@@ -134,7 +134,7 @@ public class IpcServerTests
         await fixture.UpsertAsync(fixture.Vault.Id, [ParseFrom(path)]);
 
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Vaults, fixture.Notes)));
+            handlers => handlers.Add(new NoteReadHandler(FormatParserRegistry.Default(), fixture.Vaults, fixture.Notes)));
 
         var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
         {
@@ -154,7 +154,7 @@ public class IpcServerTests
         await fixture.UpsertAsync(fixture.Vault.Id, [ParseFrom(path)]);
 
         await using var run = await IpcServerRun.StartAsync(
-            handlers => handlers.Add(new NoteReadHandler(new NoteParser(), fixture.Vaults, fixture.Notes)));
+            handlers => handlers.Add(new NoteReadHandler(FormatParserRegistry.Default(), fixture.Vaults, fixture.Notes)));
 
         var resp = await run.Client.SendAsync<NoteContent>("note:read", new()
         {

@@ -8,17 +8,22 @@ public sealed class IndexingService : IDisposable
     private readonly IndexDbContext _context;
     private readonly INoteRepository _noteRepo;
     private readonly ILinkRepository _linkRepo;
-    private readonly NoteParser _parser;
+    private readonly FormatParserRegistry _parser;
     private readonly WikilinkResolver _resolver;
     private readonly VaultWatcher _watcher;
     private readonly ILogger<IndexingService> _logger;
+    private readonly string _configPath;
+
+    // Recomputed from .pumex/config.json on startup and whenever the config file
+    // changes. Decides which files are indexed for this vault.
+    private VaultIndexPolicy _policy;
 
     public IndexingService(
         VaultRecord vault,
         IndexDbContext context,
         INoteRepository noteRepo,
         ILinkRepository linkRepo,
-        NoteParser parser,
+        FormatParserRegistry parser,
         WikilinkResolver resolver,
         VaultWatcher watcher,
         ILogger<IndexingService> logger)
@@ -31,6 +36,8 @@ public sealed class IndexingService : IDisposable
         _resolver = resolver;
         _watcher = watcher;
         _logger = logger;
+        _configPath = Path.GetFullPath(PumexPaths.VaultConfigPath(vault.Path));
+        _policy = VaultIndexPolicy.Load(vault);
     }
 
     public VaultRecord Vault => _vault;
@@ -57,6 +64,28 @@ public sealed class IndexingService : IDisposable
             return;
         }
 
+        await ReindexAllAsync(ct);
+
+        await foreach (var batch in _watcher.ReadBatchesAsync(ct))
+        {
+            foreach (var evt in batch)
+            {
+                if (ct.IsCancellationRequested) return;
+                await HandleEventAsync(evt, ct);
+            }
+            await ResolvePendingLinksAsync(ct);
+        }
+    }
+
+    /// <summary>
+    /// Full mtime-diff scan against the current policy, then resolver rebuild and
+    /// link resolution. Run on startup and after a config change. Files no longer
+    /// matched by the policy (extension disabled, newly ignored) fall out of the
+    /// enumeration and are deleted by the leftover-purge below — that is how a
+    /// disabled format gets de-indexed.
+    /// </summary>
+    private async Task ReindexAllAsync(CancellationToken ct)
+    {
         await FullScanAsync(ct);
 
         var allPaths = await _noteRepo.GetAllPathsAsync(_vault.Id);
@@ -64,16 +93,6 @@ public sealed class IndexingService : IDisposable
         await ResolvePendingLinksAsync(ct);
 
         _logger.LogInformation("Vault {Name}: scan complete, {Count} notes", _vault.Name, allPaths.Count);
-
-        await foreach (var batch in _watcher.ReadBatchesAsync(ct))
-        {
-            foreach (var evt in batch)
-            {
-                if (ct.IsCancellationRequested) return;
-                await HandleEventAsync(evt);
-            }
-            await ResolvePendingLinksAsync(ct);
-        }
     }
 
     private async Task FullScanAsync(CancellationToken ct)
@@ -84,7 +103,9 @@ public sealed class IndexingService : IDisposable
         IEnumerator<string>? enumerator = null;
         try
         {
-            enumerator = Directory.EnumerateFiles(_vault.Path, "*.md", SearchOption.AllDirectories).GetEnumerator();
+            enumerator = _policy.Enumerate(ex =>
+                _logger.LogWarning(ex, "Vault {Name}: directory enumeration error; some files may be skipped", _vault.Name))
+                .GetEnumerator();
             while (true)
             {
                 bool moved;
@@ -119,7 +140,8 @@ public sealed class IndexingService : IDisposable
         if (batch.Count > 0)
             await IndexBatchAsync(batch);
 
-        // Anything still in `indexed` is gone from disk.
+        // Anything still in `indexed` is gone — deleted from disk or no longer
+        // matched by the policy (extension disabled / now ignored).
         foreach (var path in indexed.Keys)
         {
             try { await _noteRepo.DeleteNoteAsync(path); }
@@ -140,15 +162,26 @@ public sealed class IndexingService : IDisposable
             await UpsertWithTransactionAsync(docs);
     }
 
-    private async Task HandleEventAsync(FileEvent evt)
+    private async Task HandleEventAsync(FileEvent evt, CancellationToken ct)
     {
         try
         {
+            // A config change reshapes the active format / ignore set: reload the
+            // policy and re-scan. The re-scan indexes newly-enabled files and
+            // de-indexes files whose format was just disabled.
+            if (string.Equals(Path.GetFullPath(evt.Path), _configPath, StringComparison.OrdinalIgnoreCase))
+            {
+                _policy = VaultIndexPolicy.Load(_vault);
+                _logger.LogInformation("Vault {Name}: config changed, re-scanning", _vault.Name);
+                await ReindexAllAsync(ct);
+                return;
+            }
+
             switch (evt.Type)
             {
                 case FileEventType.Created:
                 case FileEventType.Changed:
-                    if (!File.Exists(evt.Path)) return;
+                    if (!_policy.ShouldIndex(evt.Path) || !File.Exists(evt.Path)) return;
                     var doc = _parser.Parse(evt.Path);
                     await UpsertWithTransactionAsync([doc]);
                     _resolver.Add(evt.Path);

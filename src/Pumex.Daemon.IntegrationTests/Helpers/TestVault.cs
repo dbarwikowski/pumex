@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Pumex.Contracts;
 
 namespace Pumex.Daemon.IntegrationTests.Helpers;
@@ -73,6 +74,18 @@ internal sealed class TestVault : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         File.WriteAllText(full, content);
         return full;
+    }
+
+    /// <summary>Writes <c>.pumex/config.json</c> with the given active extra
+    /// formats and ignore globs.</summary>
+    public void WriteConfig(IReadOnlyList<string>? formats = null, IReadOnlyList<string>? ignore = null)
+    {
+        var config = new VaultConfig(Vault.Name, DateTimeOffset.UtcNow, VaultConfig.CurrentVersion,
+            Formats: formats, Ignore: ignore);
+        var dir = Path.Combine(Root, PumexPaths.VaultMarkerDir);
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(PumexPaths.VaultConfigPath(Root),
+            JsonSerializer.Serialize(config, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
     }
 
     public void Dispose()

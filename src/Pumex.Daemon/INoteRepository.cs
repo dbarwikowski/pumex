@@ -17,10 +17,17 @@ public interface INoteRepository
 
     Task DeleteNoteAsync(string path);
     Task<List<string>> GetAllPathsAsync(long vaultId);
-    Task<List<NoteSummary>> ListNotesAsync(long? vaultId = null);
+    Task<List<NoteSummary>> ListNotesAsync(long? vaultId = null, IReadOnlyList<string>? formats = null);
     Task<long?> GetNoteIdAsync(string path);
     Task<string?> GetNotePathByIdAsync(long id);
     Task<List<string>> GetNotePathsByNameAsync(long vaultId, string name);
+
+    /// <summary>
+    /// Note paths in the vault whose filename (with extension) matches
+    /// <paramref name="fileName"/> case-insensitively. Used to resolve explicit
+    /// references like <c>data.csv</c> for read/backlinks.
+    /// </summary>
+    Task<List<string>> GetNotePathsByFileNameAsync(long vaultId, string fileName);
     Task<List<PropertyEntry>> GetPropertiesAsync(long noteId);
     Task<string?> GetPropertyAsync(long noteId, string key);
 

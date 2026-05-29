@@ -18,7 +18,10 @@ public sealed class VaultWatcher : IDisposable
     {
         if (_watcher is not null) throw new InvalidOperationException("Watcher already started");
 
-        _watcher = new FileSystemWatcher(vaultPath, "*.md")
+        // Watch every file; the IndexingService applies the per-vault
+        // VaultIndexPolicy (active extensions + ignore globs + dot-dir skip) and
+        // also routes .pumex/config.json changes to a re-scan.
+        _watcher = new FileSystemWatcher(vaultPath, "*")
         {
             IncludeSubdirectories = true,
             NotifyFilter = NotifyFilters.LastWrite

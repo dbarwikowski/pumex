@@ -78,7 +78,7 @@ pumex read standup
 | `pumex --version` | Print CLI and daemon versions |
 | `pumex ping` | Daemon health check |
 | `pumex new <name> [path]` | Create a vault marker + register with the daemon |
-| `pumex search [query] [--tag TAG]... [--property k=v]...` | FTS5 full-text search with optional tag and property filters |
+| `pumex search [query] [--tag TAG]... [--property k=v]... [--format EXT]...` | FTS5 full-text search with optional tag, property, and format filters |
 | `pumex tags` | Tag aggregation with counts, vault-scoped by default |
 | `pumex backlinks <path-or-name>` | Notes that link to the given note via `[[wikilink]]` |
 | `pumex vault list` | List registered vaults |
@@ -88,7 +88,7 @@ pumex read standup
 | `pumex create <note> [--content TEXT]` | Create a note (pipe stdin when `--content` is omitted) |
 | `pumex append <note> [--content TEXT] [--inline]` | Append to an existing note |
 | `pumex delete <note>` | Delete a note |
-| `pumex list` | List all notes in the vault |
+| `pumex list [--format EXT]...` | List all notes in the vault, optionally filtered by format |
 | `pumex prop <note> [key [value]]` | List, get, or set frontmatter properties |
 | `pumex daily [--date YYYY-MM-DD]` | Read today's (or a given) daily note |
 | `pumex daily append [--content TEXT]` | Append to a daily note |
@@ -108,14 +108,27 @@ Most commands accept these flags to control which vault is targeted:
 
 When no scope flag is given, the vault is auto-discovered by walking up from the current working directory until a `.pumex/` marker directory is found.
 
+### Text formats
+
+Markdown is always indexed. A vault can opt into additional plain-text formats (CSV, JSON, YAML, …) via its `.pumex/config.json`:
+
+```json
+{
+  "formats": ["csv", "json"],
+  "ignore": ["templates/**", "*.tmp.md"]
+}
+```
+
+`formats` adds extra extensions (Markdown is always on); `ignore` is glob excludes applied to every format. The config is parsed as strict JSON — comments and trailing commas are not supported. Editing the config is picked up live — enabling a format indexes its files, disabling one removes them. Non-Markdown files are full-text searchable and can be linked as targets from notes with an explicit extension (`[[data.csv]]`); a bare `[[data]]` still means `data.md`. Filter with `--format`/`--ext` on `search` and `list`. Full details: [`docs/formats.md`](docs/formats.md).
+
 ## How it works
 
-```
+```text
 pumex (CLI)  ──named pipe──►  pumex-daemon (background)
                                     │
                                SQLite FTS5 index
                                     │
-                              Markdown vault(s)
+                          Markdown (+ opt-in CSV/JSON/…) vault(s)
 ```
 
 The daemon (`pumex-daemon`) owns the index and keeps it warm via per-vault `IndexingService` instances driven by a `FileSystemWatcher`. The CLI (`pumex`) is a thin client that speaks length-prefixed JSON over a named pipe — the same mechanism is the integration point for AI agents and other external tooling.
