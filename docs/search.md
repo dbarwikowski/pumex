@@ -5,8 +5,8 @@ Full-text search across notes, with optional tag and property filters.
 ## Synopsis
 
 ```
-pumex search [<query>] [--tag TAG]... [--property k=v]... [--limit N]
-             [--vault NAME | --vault-path PATH | --all]
+pumex search [<query>] [--tag TAG]... [--property k=v]... [--format EXT]...
+             [--limit N] [--vault NAME | --vault-path PATH | --all]
 ```
 
 ## Arguments
@@ -21,6 +21,7 @@ pumex search [<query>] [--tag TAG]... [--property k=v]... [--limit N]
 |---|---|
 | `--tag TAG` | Filter to notes that have this tag. Repeatable; comma-separated values accepted. |
 | `--property k=v` | Filter to notes where frontmatter key `k` equals value `v`. Repeatable. Also accepts two tokens: `--property k v`. |
+| `--format EXT` / `--ext EXT` | Filter to notes of a file format/extension (e.g. `md`, `csv`). Repeatable; comma-separated accepted. See [Text formats](formats.md). |
 | `--limit N` | Maximum number of results to return. |
 | `--vault NAME` | Search within the named vault. |
 | `--vault-path PATH` | Search within the vault at this path. |
@@ -37,7 +38,7 @@ The query supports standard FTS5 syntax:
 - Prefix wildcard: `proj*`
 - Column qualifier: `title:meeting`
 
-At least one of `query`, `--tag`, or `--property` must be provided.
+At least one of `query`, `--tag`, `--property`, or `--format` must be provided.
 
 When no vault scope is given, the vault is auto-discovered from the current working directory.
 
@@ -61,6 +62,10 @@ pumex search kubernetes --all
 
 # Limit results
 pumex search rust --limit 5
+
+# Restrict to a file format (requires the format to be enabled for the vault)
+pumex search capybara --format csv
+pumex search --format csv,json
 ```
 
 ## See also

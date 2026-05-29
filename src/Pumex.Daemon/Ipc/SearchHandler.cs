@@ -43,7 +43,7 @@ public class SearchHandler : ICommandHandler
             }
         }
 
-        return await _search.SearchAsync(query, limit, vault?.Id, tags, properties);
+        return await _search.SearchAsync(query, limit, vault?.Id, tags, properties, request.Formats());
     }
 
     // FTS5's query parser treats `-`, `:`, `(`, `)`, and uppercase AND/OR/NOT/NEAR

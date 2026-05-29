@@ -47,3 +47,8 @@ When no scope flag is given, the vault is auto-discovered by walking up from the
 | Variable | Description |
 |---|---|
 | `PUMEX_HOME` | Override the default data directory (`~/.pumex`). Also changes the named pipe, so a dev daemon runs fully isolated alongside a production install. |
+
+## Guides
+
+- [Text formats](formats.md) — index CSV/JSON/YAML and more alongside Markdown; vault `config.json`, ignore globs, linking to non-Markdown files.
+- [Distribution](distribution.md) — binaries, install scripts, dev isolation, releases.

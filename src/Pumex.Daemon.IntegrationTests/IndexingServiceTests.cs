@@ -79,6 +79,93 @@ public class IndexingServiceTests
             timeoutMs: 8000);
     }
 
+    [Fact]
+    public async Task Configured_extra_formats_are_indexed()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        fixture.WriteConfig(formats: ["csv"]);
+        fixture.WriteNote("data.csv", "id,animal\n1,capybara\n");
+
+        await using var run = await IndexingRun.StartAsync(fixture);
+
+        await AsyncPolling.UntilAsync(
+            async () =>
+            {
+                var hits = await fixture.Search.SearchAsync("capybara", vaultId: fixture.Vault.Id);
+                return hits.Any(h => h.Path.EndsWith("data.csv"));
+            },
+            timeoutMs: 8000);
+    }
+
+    [Fact]
+    public async Task Non_markdown_files_are_ignored_without_config()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        fixture.WriteNote("note.md", "markdown body\n");
+        fixture.WriteNote("data.csv", "id,animal\n1,capybara\n");
+
+        await using var run = await IndexingRun.StartAsync(fixture);
+        await AsyncPolling.UntilAsync(async () => (await fixture.Notes.GetAllPathsAsync(fixture.Vault.Id)).Count == 1);
+
+        var paths = await fixture.Notes.GetAllPathsAsync(fixture.Vault.Id);
+        Assert.DoesNotContain(paths, p => p.EndsWith("data.csv"));
+    }
+
+    [Fact]
+    public async Task Disabling_a_format_de_indexes_its_files()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        fixture.WriteConfig(formats: ["csv"]);
+        fixture.WriteNote("data.csv", "id,animal\n1,capybara\n");
+
+        await using var run = await IndexingRun.StartAsync(fixture);
+        await AsyncPolling.UntilAsync(async () => (await fixture.Notes.GetAllPathsAsync(fixture.Vault.Id)).Count == 1);
+
+        // Drop csv from the active set; the live config watch must re-scan and purge it.
+        fixture.WriteConfig();
+
+        await AsyncPolling.UntilAsync(
+            async () => (await fixture.Notes.GetAllPathsAsync(fixture.Vault.Id)).Count == 0,
+            timeoutMs: 8000);
+    }
+
+    [Fact]
+    public async Task Ignore_globs_exclude_matching_files()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        fixture.WriteConfig(ignore: ["ignored/**"]);
+        fixture.WriteNote("keep.md", "keep me\n");
+        fixture.WriteNote(Path.Combine("ignored", "skip.md"), "skip me\n");
+
+        await using var run = await IndexingRun.StartAsync(fixture);
+        await AsyncPolling.UntilAsync(async () => (await fixture.Notes.GetAllPathsAsync(fixture.Vault.Id)).Count == 1);
+
+        var paths = await fixture.Notes.GetAllPathsAsync(fixture.Vault.Id);
+        Assert.Contains(paths, p => p.EndsWith("keep.md"));
+        Assert.DoesNotContain(paths, p => p.EndsWith("skip.md"));
+    }
+
+    [Fact]
+    public async Task Explicit_extension_wikilink_to_non_markdown_resolves_as_backlink()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        fixture.WriteConfig(formats: ["csv"]);
+        fixture.WriteNote("source.md", "see [[data.csv]]\n");
+        fixture.WriteNote("data.csv", "id,animal\n1,capybara\n");
+
+        await using var run = await IndexingRun.StartAsync(fixture);
+
+        await AsyncPolling.UntilAsync(
+            async () =>
+            {
+                var sourcePath = Path.Combine(fixture.Root, "source.md");
+                var targetPath = Path.Combine(fixture.Root, "data.csv");
+                var backlinks = await fixture.Links.GetBacklinksAsync(targetPath, vaultId: fixture.Vault.Id);
+                return backlinks.Any(b => string.Equals(b, sourcePath, StringComparison.OrdinalIgnoreCase));
+            },
+            timeoutMs: 8000);
+    }
+
     /// <summary>
     /// Helper that wires up an <see cref="IndexingService"/> and runs it on a
     /// background task. Disposing cancels the run and waits for the task to
@@ -105,7 +192,7 @@ public class IndexingServiceTests
                 fixture.Context,
                 fixture.Notes,
                 fixture.Links,
-                new NoteParser(),
+                FormatParserRegistry.Default(),
                 new WikilinkResolver(),
                 new VaultWatcher(),
                 NullLogger<IndexingService>.Instance);

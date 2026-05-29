@@ -4,13 +4,13 @@ namespace Pumex.Daemon.Ipc;
 
 public class NoteReadHandler : ICommandHandler
 {
-    private readonly NoteParser _parser;
+    private readonly FormatParserRegistry _parser;
     private readonly IVaultRepository _vaults;
     private readonly INoteRepository _notes;
 
     public string Command => "note:read";
 
-    public NoteReadHandler(NoteParser parser, IVaultRepository vaults, INoteRepository notes)
+    public NoteReadHandler(FormatParserRegistry parser, IVaultRepository vaults, INoteRepository notes)
     {
         _parser = parser;
         _vaults = vaults;
@@ -20,7 +20,8 @@ public class NoteReadHandler : ICommandHandler
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
         var vault = await request.ResolveVaultAsync(_vaults);
-        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes);
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(
+            request.Require("path"), vault, _notes, allowNonMarkdown: true);
         if (!File.Exists(path))
             throw new FileNotFoundException($"Note not found: {path}");
 
@@ -55,16 +56,14 @@ public class NoteCreateHandler : ICommandHandler
     private readonly IVaultRepository _vaults;
     private readonly INoteRepository _notes;
     private readonly IInlineIndex _inlineIndex;
-    private readonly NoteParser _parser;
 
     public string Command => "note:create";
 
-    public NoteCreateHandler(IVaultRepository vaults, INoteRepository notes, IInlineIndex inlineIndex, NoteParser parser)
+    public NoteCreateHandler(IVaultRepository vaults, INoteRepository notes, IInlineIndex inlineIndex)
     {
         _vaults = vaults;
         _notes = notes;
         _inlineIndex = inlineIndex;
-        _parser = parser;
     }
 
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
@@ -138,7 +137,7 @@ public class NoteListHandler : ICommandHandler
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
         var vault = await request.ResolveVaultAsync(_vaults);
-        return await _notes.ListNotesAsync(vault?.Id);
+        return await _notes.ListNotesAsync(vault?.Id, request.Formats());
     }
 }
 

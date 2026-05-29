@@ -8,4 +8,4 @@ public record TagCount(string Tag, int Count);
 
 public record PropertyEntry(string Key, string Value);
 
-public record NoteSummary(string Path, string Name, long Mtime, long Size);
+public record NoteSummary(string Path, string Name, long Mtime, long Size, string? Format = null);

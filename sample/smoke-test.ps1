@@ -131,6 +131,28 @@ Assert-Success 'search --property priority=high' (Invoke-Pumex 'search', '--prop
 Step 'search --limit'
 Assert-Success 'search with --limit 2' (Invoke-Pumex 'search', 'note', '--limit', '2', '--vault', $vaultName)
 
+# ── text formats (CSV / JSON) ──────────────────────────────────────────────────
+Step 'list --format csv'
+Assert-Success 'list --format csv shows animals.csv' (Invoke-Pumex 'list', '--format', 'csv', '--vault', $vaultName) -contains 'animals'
+
+Step 'search full-text hits a CSV body'
+Assert-Success 'search capybara finds CSV' (Invoke-Pumex 'search', 'capybara', '--vault', $vaultName) -contains 'animals.csv'
+
+Step 'search --format json'
+Assert-Success 'search capybara --format json' (Invoke-Pumex 'search', 'capybara', '--format', 'json', '--vault', $vaultName) -contains 'settings.json'
+
+Step 'read non-markdown by explicit extension (raw fallback)'
+Assert-Success 'read data/animals.csv' (Invoke-Pumex 'read', 'data/animals.csv', '--vault', $vaultName) -contains 'capybara'
+
+Step 'bare name does not match a non-markdown file'
+Assert-Failure 'read animals (bare, no .md) fails' (Invoke-Pumex 'read', 'animals', '--vault', $vaultName)
+
+Step 'non-markdown files are read-only (no create)'
+Assert-Failure 'create data/new.csv rejected' (Invoke-Pumex 'create', 'data/new.csv', '--content', 'x', '--vault', $vaultName)
+
+Step 'backlinks for a non-markdown target'
+Assert-Success 'backlinks animals.csv -> dataset-notes' (Invoke-Pumex 'backlinks', 'animals.csv', '--vault', $vaultName) -contains 'dataset-notes'
+
 # ── backlinks ─────────────────────────────────────────────────────────────────
 Step 'backlinks for wiki/index'
 # temp note links [[wiki/index]] so there should be at least one backlink

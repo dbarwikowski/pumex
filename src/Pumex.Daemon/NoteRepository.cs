@@ -37,22 +37,66 @@ public class NoteRepository(IndexDbContext context) : INoteRepository
         return result;
     }
 
-    public async Task<List<NoteSummary>> ListNotesAsync(long? vaultId = null)
+    public async Task<List<NoteSummary>> ListNotesAsync(
+        long? vaultId = null,
+        IReadOnlyList<string>? formats = null)
     {
         using var _ = await context.AcquireAsync();
+        var sql = new System.Text.StringBuilder("SELECT path, name, mtime, size, format FROM notes WHERE 1=1");
+        var parameters = new List<(string, object)>();
+
+        if (vaultId is not null)
+        {
+            sql.Append(" AND vault_id = @vaultId");
+            parameters.Add(("@vaultId", vaultId.Value));
+        }
+        AppendFormatFilter(sql, parameters, formats);
+        sql.Append(" ORDER BY mtime DESC");
+
         var result = new List<NoteSummary>();
-        using var cmd = vaultId is null
-            ? context.Command("SELECT path, name, mtime, size FROM notes ORDER BY mtime DESC")
-            : context.Command(
-                "SELECT path, name, mtime, size FROM notes WHERE vault_id = @vaultId ORDER BY mtime DESC",
-                ("@vaultId", vaultId.Value));
+        using var cmd = context.Command(sql.ToString(), parameters.ToArray());
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             result.Add(new NoteSummary(
                 reader.GetString(0),
                 reader.GetString(1),
                 reader.GetInt64(2),
-                reader.GetInt64(3)));
+                reader.GetInt64(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4)));
+        return result;
+    }
+
+    // Shared by ListNotesAsync and SearchRepository: AND n.format IN (...).
+    internal static void AppendFormatFilter(
+        System.Text.StringBuilder sql,
+        List<(string, object)> parameters,
+        IReadOnlyList<string>? formats,
+        string column = "format")
+    {
+        if (formats is null || formats.Count == 0) return;
+        var placeholders = new List<string>(formats.Count);
+        for (var i = 0; i < formats.Count; i++)
+        {
+            var p = $"@fmt_{i}";
+            placeholders.Add(p);
+            parameters.Add((p, formats[i].TrimStart('.').ToLowerInvariant()));
+        }
+        sql.Append($" AND {column} IN ({string.Join(", ", placeholders)})");
+    }
+
+    public async Task<List<string>> GetNotePathsByFileNameAsync(long vaultId, string fileName)
+    {
+        using var _ = await context.AcquireAsync();
+        var result = new List<string>();
+        using var cmd = context.Command(
+            "SELECT path FROM notes WHERE vault_id = @vaultId", ("@vaultId", vaultId));
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var path = reader.GetString(0);
+            if (string.Equals(Path.GetFileName(path), fileName, StringComparison.OrdinalIgnoreCase))
+                result.Add(path);
+        }
         return result;
     }
 
@@ -73,12 +117,13 @@ public class NoteRepository(IndexDbContext context) : INoteRepository
         using var upsertCmd = context.Connection.CreateCommand();
         upsertCmd.Transaction = tx;
         upsertCmd.CommandText = """
-            INSERT INTO notes (vault_id, path, name, mtime, size)
-            VALUES ($vaultId, $path, $name, $mtime, $size)
+            INSERT INTO notes (vault_id, path, name, mtime, size, format)
+            VALUES ($vaultId, $path, $name, $mtime, $size, $format)
             ON CONFLICT(path) DO UPDATE SET
-                name  = excluded.name,
-                mtime = excluded.mtime,
-                size  = excluded.size
+                name   = excluded.name,
+                mtime  = excluded.mtime,
+                size   = excluded.size,
+                format = excluded.format
             RETURNING id
             """;
         var pVaultId = upsertCmd.Parameters.Add("$vaultId", SqliteType.Integer);
@@ -86,6 +131,7 @@ public class NoteRepository(IndexDbContext context) : INoteRepository
         var pName    = upsertCmd.Parameters.Add("$name",    SqliteType.Text);
         var pMtime   = upsertCmd.Parameters.Add("$mtime",   SqliteType.Integer);
         var pSize    = upsertCmd.Parameters.Add("$size",    SqliteType.Integer);
+        var pFormat  = upsertCmd.Parameters.Add("$format",  SqliteType.Text);
         pVaultId.Value = vaultId;
 
         using var delTagsCmd  = context.PrepareById(tx, "DELETE FROM tags       WHERE note_id   = $id", out var pDelTagsId);
@@ -117,10 +163,11 @@ public class NoteRepository(IndexDbContext context) : INoteRepository
         {
             var name = Path.GetFileNameWithoutExtension(note.Path);
 
-            pPath.Value  = note.Path;
-            pName.Value  = name;
-            pMtime.Value = note.Mtime;
-            pSize.Value  = note.Size;
+            pPath.Value   = note.Path;
+            pName.Value   = name;
+            pMtime.Value  = note.Mtime;
+            pSize.Value   = note.Size;
+            pFormat.Value = Path.GetExtension(note.Path).TrimStart('.').ToLowerInvariant();
             var noteId = (long)(await upsertCmd.ExecuteScalarAsync())!;
             upserted.Add((note.Path, noteId));
 
@@ -243,8 +290,11 @@ public class NoteRepository(IndexDbContext context) : INoteRepository
     {
         using var _ = await context.AcquireAsync();
         var result = new List<string>();
+        // Bare-name resolution is Markdown-only: [[data]] / `read data` must hit
+        // data.md, never data.csv (non-Markdown files require an explicit
+        // extension). The name column has no extension, so filter by format.
         using var cmd = context.Command(
-            "SELECT path FROM notes WHERE vault_id = @vaultId AND name = @name COLLATE NOCASE",
+            "SELECT path FROM notes WHERE vault_id = @vaultId AND name = @name COLLATE NOCASE AND format = 'md'",
             ("@vaultId", vaultId), ("@name", name));
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync()) result.Add(reader.GetString(0));

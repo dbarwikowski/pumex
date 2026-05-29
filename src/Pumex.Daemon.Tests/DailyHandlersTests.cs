@@ -129,7 +129,7 @@ public class InlineIndexTests : IDisposable
     [Fact]
     public async Task NoteCreate_makes_the_note_searchable_immediately_without_a_watcher()
     {
-        var handler = new NoteCreateHandler(_fx.Vaults, _fx.Notes, _fx.InlineIndex, _parser);
+        var handler = new NoteCreateHandler(_fx.Vaults, _fx.Notes, _fx.InlineIndex);
         var path = Path.Combine(_vault.Path, "fresh.md");
         var request = new IpcRequest("note:create", new()
         {

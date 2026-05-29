@@ -28,6 +28,9 @@ public static class PumexPaths
     public const string VaultMarkerDir = ".pumex";
     public const string VaultConfigFile = "config.json";
 
+    public static string VaultConfigPath(string vaultRoot) =>
+        Path.Combine(vaultRoot, VaultMarkerDir, VaultConfigFile);
+
     public static string? FindVaultRoot(string startPath)
     {
         var dir = new DirectoryInfo(startPath);

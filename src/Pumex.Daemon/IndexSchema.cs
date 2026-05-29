@@ -13,6 +13,7 @@ public class IndexSchema(IndexDbContext context)
         ApplyPragmas();
         MigrateLegacyFts();
         EnsureSchema();
+        MigrateNotesFormatColumn();
     }
 
     private void ApplyPragmas()
@@ -112,6 +113,27 @@ public class IndexSchema(IndexDbContext context)
             DROP TABLE notes_fts;
             UPDATE notes SET mtime = 0;
             """);
+    }
+
+    // Adds notes.format (file extension, lowercase, no dot) to pre-existing
+    // databases. Every note indexed before this column existed was Markdown
+    // (only *.md was discovered), so backfill those rows with 'md'. New upserts
+    // populate format from the file extension.
+    private void MigrateNotesFormatColumn()
+    {
+        if (ColumnExists("notes", "format")) return;
+        context.Execute("""
+            ALTER TABLE notes ADD COLUMN format TEXT;
+            UPDATE notes SET format = 'md' WHERE format IS NULL;
+            """);
+    }
+
+    private bool ColumnExists(string table, string column)
+    {
+        using var cmd = context.Connection.CreateCommand();
+        cmd.CommandText = $"SELECT 1 FROM pragma_table_info('{table}') WHERE name = @col";
+        cmd.Parameters.AddWithValue("@col", column);
+        return cmd.ExecuteScalar() is not null;
     }
 
     private bool TableExists(string name)
