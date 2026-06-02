@@ -60,7 +60,7 @@ Ignore rules apply to Markdown too, so you can finally exclude e.g.
 | Structured properties / tags | yes | per-format (none from the framework fallback) |
 | Appears in `pumex backlinks` | yes | yes — as a **target** |
 | Emits `[[wikilinks]]` | yes | no (target only, never a source) |
-| `pumex read` | rendered | raw passthrough (until a renderer ships) |
+| `pumex read` | rendered | CSV/TSV → table; others → raw passthrough (until a renderer ships) |
 | `create` / `append` / `prop set` | yes | no — Markdown-only |
 
 ### Linking to non-Markdown files
@@ -75,9 +75,26 @@ A bare `[[data]]` still resolves to `data.md` only — non-Markdown targets alwa
 require the extension. The same rule applies to commands:
 
 ```sh
-pumex read data.csv      # explicit extension → reads the CSV (raw)
+pumex read data.csv      # explicit extension → renders the CSV as a table
 pumex read data          # bare name → data.md only
 pumex backlinks data.csv # who links to the CSV
+```
+
+## Rendering CSV / TSV
+
+`pumex read` renders `.csv` and `.tsv` files as a table, using row 1 as the
+column headers. The delimiter (`,` vs `\t`) is auto-detected from the first few
+non-empty lines; a file that isn't recognizably tabular falls back to raw text.
+
+Use `--limit N` to cap how many data rows are shown (default `100`); when capped,
+a `showing X of Y rows` line is printed below the table. `--limit` is a display
+concern only — the daemon always returns the full file, and the flag is ignored by
+formats that don't paginate. Use `--raw` to print the file verbatim instead.
+
+```sh
+pumex read animals.csv            # table, up to 100 rows
+pumex read animals.csv --limit 20 # cap to 20 rows
+pumex read animals.csv --raw      # verbatim, no table
 ```
 
 ## Filtering by format

@@ -19,7 +19,7 @@ Display a note's content.
 ### Synopsis
 
 ```
-pumex read <note> [--raw] [--vault NAME | --vault-path PATH]
+pumex read <note> [--raw] [--limit N] [--vault NAME | --vault-path PATH]
 ```
 
 ### Arguments
@@ -33,6 +33,7 @@ pumex read <note> [--raw] [--vault NAME | --vault-path PATH]
 | Flag | Description |
 |---|---|
 | `--raw` | Print the raw file contents without any rendering or formatting. |
+| `--limit N` | Max data rows to render for tabular formats (CSV/TSV). Default `100`. Display-only — the daemon always returns the full file; ignored by formats that don't paginate (e.g. Markdown). |
 | `--vault NAME` | Resolve name within the named vault. |
 | `--vault-path PATH` | Resolve name within the vault at this path. |
 
@@ -42,7 +43,10 @@ Reads and displays the note. Without `--raw`:
 
 - Frontmatter properties are shown in a table.
 - Inline tags are shown as `#tag` labels.
-- The body is rendered by format: Markdown gets headings, tables, code blocks, bold/italic, lists, blockquotes, and thematic breaks. Other formats are printed as raw text until a dedicated renderer ships.
+- The body is rendered by format:
+  - **Markdown** gets headings, tables, code blocks, bold/italic, lists, blockquotes, and thematic breaks.
+  - **CSV / TSV** render as a table with row 1 as the column headers. The delimiter (`,` or `\t`) is auto-detected from the first few lines; if the file isn't recognizably tabular it falls back to raw text. When more than `--limit` data rows exist, a `showing X of Y rows` line prints below the table.
+  - **Other formats** are printed as raw text until a dedicated renderer ships.
 
 With `--raw`, the file is printed exactly as stored on disk, including frontmatter delimiters.
 
@@ -58,8 +62,11 @@ pumex read architecture --raw
 # Read a note by path
 pumex read ./docs/architecture.md
 
-# Read a non-Markdown file (extension required; printed raw)
+# Read a CSV/TSV file as a table (extension required)
 pumex read data.csv
+
+# Cap the rendered rows (default 100)
+pumex read data.csv --limit 20
 ```
 
 ---
