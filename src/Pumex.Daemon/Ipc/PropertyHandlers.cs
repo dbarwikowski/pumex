@@ -20,7 +20,10 @@ public class PropertyListHandler : ICommandHandler
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
         var vault = await request.ResolveVaultAsync(_vaults);
-        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes);
+        // Read-only: non-Markdown files (e.g. JSON) can expose properties, so resolve
+        // them by explicit extension like `read`/`backlinks` do. Writing (property:set)
+        // stays Markdown-only.
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes, allowNonMarkdown: true);
         var noteId = await _notes.GetNoteIdAsync(path)
             ?? throw new FileNotFoundException($"Note not in index: {path}");
         return await _notes.GetPropertiesAsync(noteId);
@@ -43,7 +46,8 @@ public class PropertyGetHandler : ICommandHandler
     public async Task<object?> HandleAsync(IpcRequest request, CancellationToken ct)
     {
         var vault = await request.ResolveVaultAsync(_vaults);
-        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes);
+        // Read-only: resolve non-Markdown targets too (see PropertyListHandler).
+        var path = await IpcRequestExtensions.ResolveNotePathAsync(request.Require("path"), vault, _notes, allowNonMarkdown: true);
         var key = request.Require("key");
 
         var noteId = await _notes.GetNoteIdAsync(path)

@@ -57,10 +57,10 @@ Ignore rules apply to Markdown too, so you can finally exclude e.g.
 | Capability | Markdown | Other formats |
 |---|---|---|
 | Full-text search | yes | yes |
-| Structured properties / tags | yes | per-format (none from the framework fallback) |
+| Structured properties / tags | yes | per-format (JSON: top-level scalars → properties; none from the framework fallback) |
 | Appears in `pumex backlinks` | yes | yes — as a **target** |
 | Emits `[[wikilinks]]` | yes | no (target only, never a source) |
-| `pumex read` | rendered | CSV/TSV → table; others → raw passthrough (until a renderer ships) |
+| `pumex read` | rendered | CSV/TSV → table; JSON → syntax-highlighted; others → raw passthrough (until a renderer ships) |
 | `create` / `append` / `prop set` | yes | no — Markdown-only |
 
 ### Linking to non-Markdown files
@@ -96,6 +96,38 @@ pumex read animals.csv            # table, up to 100 rows
 pumex read animals.csv --limit 20 # cap to 20 rows
 pumex read animals.csv --raw      # verbatim, no table
 ```
+
+## Rendering JSON
+
+Enable `.json` with `"formats": ["json"]`. JSON files are full-text searchable,
+and the **top-level scalar keys of a root object** (string / number / boolean)
+become queryable properties — so they work with `pumex search --property` and
+`pumex property` just like Markdown frontmatter:
+
+```sh
+pumex search --property status=active --format json
+pumex property get settings.json theme
+```
+
+Nested objects/arrays and `null` values are not properties (they stay searchable
+via full text only). An array-root or bare-scalar document has no properties.
+
+`pumex read` renders JSON with syntax highlighting:
+
+```sh
+pumex read settings.json            # syntax-highlighted JSON
+pumex read records.json --limit 20  # array root: show the first 20 elements
+pumex read settings.json --raw      # verbatim, no highlighting
+```
+
+- **JSONC tolerated.** `//` comments and trailing commas are accepted (handy for
+  `tsconfig.json`-style files) for both indexing and rendering. A file that
+  still fails to parse falls back to full-text indexing and raw rendering.
+- **`--limit`** caps how many elements of an **array-root** document are shown
+  (default `100`, with a `showing X of Y elements` notice); it is ignored for
+  object or scalar roots. JSON is never truncated by depth.
+- **`.jsonl` (newline-delimited JSON) is not supported** as a structured format.
+  If enabled it is indexed as plain full text with no per-record properties.
 
 ## Filtering by format
 

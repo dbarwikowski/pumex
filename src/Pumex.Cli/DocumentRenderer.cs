@@ -18,6 +18,7 @@ internal static class DocumentRenderer
             [".md"] = (body, _) => MarkdownRenderer.Render(body),
             [".csv"] = CsvRenderer.Render,
             [".tsv"] = CsvRenderer.Render,
+            [".json"] = JsonRenderer.Render,
         };
 
     public static void Render(string path, string body, int limit)

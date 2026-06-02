@@ -146,6 +146,18 @@ Assert-Success 'search capybara finds animals' (Invoke-Pumex 'search', 'capybara
 Step 'search --format json'
 Assert-Success 'search capybara --format json' (Invoke-Pumex 'search', 'capybara', '--format', 'json', '--vault', $vaultName) -contains 'settings'
 
+Step 'read data/settings.json (JSON rendering, JSONC tolerated)'
+Assert-Success 'read data/settings.json' (Invoke-Pumex 'read', 'data/settings.json', '--vault', $vaultName) -contains 'capybara'
+
+Step 'JSON top-level scalars become properties'
+Assert-Success 'prop get theme from settings.json' (Invoke-Pumex 'prop', 'data/settings.json', 'theme', '--vault', $vaultName) -contains 'dark'
+
+Step 'search by a property extracted from JSON'
+Assert-Success 'search --property theme=dark --format json' (Invoke-Pumex 'search', '--property', 'theme=dark', '--format', 'json', '--vault', $vaultName) -contains 'settings'
+
+Step 'read data/events.json --limit 2 (array-root cap)'
+Assert-Success 'read events.json --limit 2' (Invoke-Pumex 'read', 'data/events.json', '--limit', '2', '--vault', $vaultName) -contains 'showing 2 of 5 elements'
+
 Step 'read non-markdown by explicit extension (raw fallback)'
 Assert-Success 'read data/animals.csv' (Invoke-Pumex 'read', 'data/animals.csv', '--vault', $vaultName) -contains 'capybara'
 

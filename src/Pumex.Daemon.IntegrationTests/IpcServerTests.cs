@@ -166,6 +166,48 @@ public class IpcServerTests
         Assert.Equal("", resp.Data!.Properties["aliases"]);
     }
 
+    [Fact]
+    public async Task Property_get_resolves_a_json_file_by_filename_and_returns_a_top_level_scalar()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        var path = fixture.WriteNote("data/settings.json", """{ "theme": "dark", "nested": { "x": 1 } }""");
+        await fixture.UpsertAsync(fixture.Vault.Id, [new JsonFormatParser().Parse(path)]);
+
+        await using var run = await IpcServerRun.StartAsync(
+            handlers => handlers.Add(new PropertyGetHandler(fixture.Vaults, fixture.Notes)));
+
+        var resp = await run.Client.SendAsync<string>("property:get", new()
+        {
+            ["path"] = "settings.json",   // explicit extension, resolved by filename (non-MD, read-only)
+            ["key"] = "theme",
+            ["vaultPath"] = fixture.Vault.Path,
+        });
+
+        Assert.True(resp.Success, resp.Error);
+        Assert.Equal("dark", resp.Data);
+    }
+
+    [Fact]
+    public async Task Property_list_on_a_json_file_omits_nested_values()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        var path = fixture.WriteNote("data/settings.json", """{ "theme": "dark", "nested": { "x": 1 } }""");
+        await fixture.UpsertAsync(fixture.Vault.Id, [new JsonFormatParser().Parse(path)]);
+
+        await using var run = await IpcServerRun.StartAsync(
+            handlers => handlers.Add(new PropertyListHandler(fixture.Vaults, fixture.Notes)));
+
+        var resp = await run.Client.SendAsync<List<PropertyEntry>>("property:list", new()
+        {
+            ["path"] = "settings.json",
+            ["vaultPath"] = fixture.Vault.Path,
+        });
+
+        Assert.True(resp.Success, resp.Error);
+        Assert.Equal("dark", resp.Data!.Single(p => p.Key == "theme").Value);
+        Assert.DoesNotContain(resp.Data!, p => p.Key == "nested");   // nested object is not a top-level scalar
+    }
+
     private static NoteDocument ParseFrom(string path) => new NoteParser().Parse(path);
 
     private sealed class IpcServerRun : IAsyncDisposable

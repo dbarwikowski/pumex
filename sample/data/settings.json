@@ -1,5 +1,12 @@
 {
+  // JSONC is tolerated: this comment and the trailing comma below are ignored.
   "theme": "dark",
   "autosave": true,
-  "keyword": "capybara"
+  "fontSize": 13,
+  "keyword": "capybara",
+  "editor": {
+    "wordWrap": "on",
+    "rulers": [80, 120]
+  },
+  "plugins": ["search", "backlinks"],
 }
