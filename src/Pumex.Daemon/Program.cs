@@ -52,10 +52,12 @@ try
             s.AddSingleton<ISearchRepository, SearchRepository>();
 
             // Markdown is the only format parser compiled in by the framework;
-            // CSV/JSON/YAML/… parsers are added by their own work items. The
-            // registry dispatches by extension and falls back to RawTextParser.
+            // Format parsers are added by their own work items (JSON below; CSV is
+            // renderer-only). The registry dispatches by extension and falls back
+            // to RawTextParser for any active extension without a dedicated parser.
             s.AddSingleton<NoteParser>();
             s.AddSingleton<IFormatParser>(sp => sp.GetRequiredService<NoteParser>());
+            s.AddSingleton<IFormatParser, JsonFormatParser>();
             s.AddSingleton<RawTextParser>();
             s.AddSingleton<FormatParserRegistry>();
             s.AddSingleton<IInlineIndex, InlineIndex>();

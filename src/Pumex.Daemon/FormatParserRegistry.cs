@@ -21,9 +21,9 @@ public sealed class FormatParserRegistry
                 _byExtension[ext] = parser;
     }
 
-    /// <summary>Convenience for tests: Markdown parser + raw-text fallback.</summary>
+    /// <summary>Convenience for tests: Markdown + JSON parsers + raw-text fallback.</summary>
     public static FormatParserRegistry Default() =>
-        new([new NoteParser()], new RawTextParser());
+        new([new NoteParser(), new JsonFormatParser()], new RawTextParser());
 
     public NoteDocument Parse(string filePath)
     {

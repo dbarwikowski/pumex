@@ -1,0 +1,7 @@
+[
+  { "id": 1, "kind": "create", "note": "wiki/index" },
+  { "id": 2, "kind": "append", "note": "daily/2026-05-20" },
+  { "id": 3, "kind": "search", "query": "capybara" },
+  { "id": 4, "kind": "read", "note": "data/projects.tsv" },
+  { "id": 5, "kind": "delete", "note": "smoke/temp-note" }
+]
