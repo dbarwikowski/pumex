@@ -1,0 +1,8 @@
+id	name	status	owner	due_date	priority
+1	Pumex daemon rewrite	done	dbarwikowski	2026-03-15	high
+2	CSV/TSV table rendering	done	dbarwikowski	2026-05-30	high
+3	Full-text search tuning	in-progress	dbarwikowski	2026-06-15	medium
+4	Daily note templates	backlog	dbarwikowski	2026-07-01	low
+5	Web UI prototype	backlog	agentsmith	2026-08-01	low
+6	Multi-vault sync	in-progress	agentsmith	2026-06-30	high
+7	Plugin API design	backlog	dbarwikowski	2026-09-01	medium
