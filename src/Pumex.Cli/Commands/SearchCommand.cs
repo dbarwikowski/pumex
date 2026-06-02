@@ -88,10 +88,11 @@ internal static class SearchCommand
 
         var table = new Table().Border(TableBorder.Minimal);
         table.AddColumn("Note");
+        table.AddColumn("Format");
         table.AddColumn("Path");
         table.AddColumn("Snippet");
         foreach (var r in results)
-            table.AddRow(r.Name.EscapeMarkup(), r.Path.EscapeMarkup(), r.Snippet.EscapeMarkup());
+            table.AddRow(r.Name.EscapeMarkup(), (r.Format ?? "").EscapeMarkup(), r.Path.EscapeMarkup(), r.Snippet.EscapeMarkup());
         AnsiConsole.Write(table);
         return 0;
     }

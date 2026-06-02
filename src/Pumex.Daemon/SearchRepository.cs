@@ -26,7 +26,7 @@ public class SearchRepository(IndexDbContext context) : ISearchRepository
         if (hasQuery)
         {
             sql.Append("""
-                SELECT n.path, n.name
+                SELECT n.path, n.name, n.format
                 FROM notes_fts
                 JOIN notes n ON n.id = notes_fts.rowid
                 WHERE notes_fts MATCH @query
@@ -36,7 +36,7 @@ public class SearchRepository(IndexDbContext context) : ISearchRepository
         else
         {
             sql.Append("""
-                SELECT n.path, n.name
+                SELECT n.path, n.name, n.format
                 FROM notes n
                 WHERE 1=1
                 """);
@@ -76,20 +76,20 @@ public class SearchRepository(IndexDbContext context) : ISearchRepository
         sql.Append(" LIMIT @limit");
         parameters.Add(("@limit", limit));
 
-        List<(string Path, string Name)> matches;
+        List<(string Path, string Name, string Format)> matches;
         {
             using var _ = await context.AcquireAsync();
-            matches = new List<(string Path, string Name)>();
+            matches = new List<(string Path, string Name, string Format)>();
             using var cmd = context.Command(sql.ToString(), parameters.ToArray());
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
-                matches.Add((reader.GetString(0), reader.GetString(1)));
+                matches.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
         }
 
         // Gate is released above; BuildSnippet reads files from disk and must
         // not run while the connection semaphore is held.
         return matches
-            .Select(m => new SearchResult(m.Path, m.Name, BuildSnippet(m.Path, query)))
+            .Select(m => new SearchResult(m.Path, m.Name, BuildSnippet(m.Path, query), m.Format))
             .ToList();
     }
 

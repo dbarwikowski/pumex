@@ -2,7 +2,7 @@ namespace Pumex.Contracts;
 
 public record VaultRecord(long Id, string Name, string Path);
 
-public record SearchResult(string Path, string Name, string Snippet);
+public record SearchResult(string Path, string Name, string Snippet, string? Format = null);
 
 public record TagCount(string Tag, int Count);
 

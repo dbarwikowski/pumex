@@ -139,10 +139,12 @@ Step 'list --format tsv'
 Assert-Success 'list --format tsv shows projects.tsv' (Invoke-Pumex 'list', '--format', 'tsv', '--vault', $vaultName) -contains 'projects'
 
 Step 'search full-text hits a CSV body'
-Assert-Success 'search capybara finds animals.csv' (Invoke-Pumex 'search', 'capybara', '--vault', $vaultName) -contains 'animals.csv'
+# The Note column shows the extension-less name; format is its own column. Assert on
+# the name (short, never wraps) rather than the path (wraps on long snippets).
+Assert-Success 'search capybara finds animals' (Invoke-Pumex 'search', 'capybara', '--vault', $vaultName) -contains 'animals'
 
 Step 'search --format json'
-Assert-Success 'search capybara --format json' (Invoke-Pumex 'search', 'capybara', '--format', 'json', '--vault', $vaultName) -contains 'settings.json'
+Assert-Success 'search capybara --format json' (Invoke-Pumex 'search', 'capybara', '--format', 'json', '--vault', $vaultName) -contains 'settings'
 
 Step 'read non-markdown by explicit extension (raw fallback)'
 Assert-Success 'read data/animals.csv' (Invoke-Pumex 'read', 'data/animals.csv', '--vault', $vaultName) -contains 'capybara'
@@ -160,10 +162,10 @@ Step 'read data/projects.tsv --limit 2'
 Assert-Success 'read projects.tsv --limit 2' (Invoke-Pumex 'read', 'data/projects.tsv', '--limit', '2', '--vault', $vaultName) -contains 'daemon'
 
 Step 'search full-text hits expenses.csv body'
-Assert-Success 'search Copilot finds expenses.csv' (Invoke-Pumex 'search', 'Copilot', '--vault', $vaultName) -contains 'expenses.csv'
+Assert-Success 'search Copilot finds expenses' (Invoke-Pumex 'search', 'Copilot', '--vault', $vaultName) -contains 'expenses'
 
 Step 'search full-text hits projects.tsv body'
-Assert-Success 'search agentsmith finds projects.tsv' (Invoke-Pumex 'search', 'agentsmith', '--vault', $vaultName) -contains 'projects.tsv'
+Assert-Success 'search agentsmith finds projects' (Invoke-Pumex 'search', 'agentsmith', '--vault', $vaultName) -contains 'projects'
 
 Step 'bare name does not match a non-markdown file'
 Assert-Failure 'read animals (bare, no .md) fails' (Invoke-Pumex 'read', 'animals', '--vault', $vaultName)

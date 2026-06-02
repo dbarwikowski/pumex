@@ -102,6 +102,22 @@ public class SearchRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task SearchAsync_populates_format_from_file_extension()
+    {
+        var vaultId = await _fx.Vaults.AddVaultAsync("v", "/v");
+        await _fx.UpsertAsync(vaultId, [
+            Note("/v/note.md",  body: "shared keyword zebrafinch"),
+            Note("/v/data.csv", body: "shared keyword zebrafinch"),
+        ]);
+
+        var hits = await _fx.Search.SearchAsync("zebrafinch", vaultId: vaultId);
+
+        Assert.Equal(2, hits.Count);
+        Assert.Equal("md",  hits.Single(h => h.Path == "/v/note.md").Format);
+        Assert.Equal("csv", hits.Single(h => h.Path == "/v/data.csv").Format);
+    }
+
+    [Fact]
     public async Task SearchAsync_scopes_to_vault_when_id_is_supplied()
     {
         var aId = await _fx.Vaults.AddVaultAsync("alpha", "/alpha");
