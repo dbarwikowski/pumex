@@ -19,17 +19,17 @@ Not yet shipped: plugin SDK, IPC auth. See `pumex --help` for the current comman
 ## Install
 
 **Linux / macOS:**
+PATH and daemon service are configured automatically.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/install.sh | sh
-# PATH and daemon service are configured automatically.
 ```
 
 **Windows (PowerShell):**
+PATH is updated automatically. The daemon is registered as a per-user scheduled task — no admin shell required.
 
 ```powershell
 iwr https://raw.githubusercontent.com/dbarwikowski/pumex/master/install/install.ps1 | iex
-# PATH is updated automatically. The daemon is registered as a per-user scheduled task — no admin shell required.
 ```
 
 The installer downloads the right binary for your OS + arch from the latest GitHub Release and drops it into `~/.pumex/bin/`. Pin a version with `PUMEX_VERSION=v0.2.0` (or `$env:PUMEX_VERSION` on Windows).
@@ -84,7 +84,7 @@ pumex read standup
 | `pumex vault list` | List registered vaults |
 | `pumex vault add <name> <path>` | Register an existing directory as a vault |
 | `pumex vault remove <name>` | Unregister a vault (files untouched) |
-| `pumex read <note> [--raw] [--limit N]` | Display a note — parsed frontmatter + rendered body (Markdown, CSV/TSV as a table, JSON syntax-highlighted), or raw |
+| `pumex read <note> [--raw] [--limit N]` | Display a note — parsed frontmatter + rendered body (Markdown, CSV/TSV as a table, JSON/YAML syntax-highlighted), or raw |
 | `pumex create <note> [--content TEXT]` | Create a note (pipe stdin when `--content` is omitted) |
 | `pumex append <note> [--content TEXT] [--inline]` | Append to an existing note |
 | `pumex delete <note>` | Delete a note |
@@ -114,12 +114,12 @@ Markdown is always indexed. A vault can opt into additional plain-text formats (
 
 ```json
 {
-  "formats": ["csv", "json"],
+  "formats": ["csv", "json", "yaml"],
   "ignore": ["templates/**", "*.tmp.md"]
 }
 ```
 
-`formats` adds extra extensions (Markdown is always on); `ignore` is glob excludes applied to every format. The config is parsed as strict JSON — comments and trailing commas are not supported. Editing the config is picked up live — enabling a format indexes its files, disabling one removes them. Non-Markdown files are full-text searchable and can be linked as targets from notes with an explicit extension (`[[data.csv]]`); a bare `[[data]]` still means `data.md`. Filter with `--format`/`--ext` on `search` and `list`. CSV/TSV files render as a table in `pumex read data.csv` (cap rows with `--limit N`, default 100); JSON renders syntax-highlighted, and a root object's top-level scalar keys become searchable properties (JSONC comments/trailing commas tolerated). Other non-Markdown formats print raw until a renderer ships. Full details: [`docs/formats.md`](docs/formats.md).
+`formats` adds extra extensions (Markdown is always on); `ignore` is glob excludes applied to every format. The config is parsed as strict JSON — comments and trailing commas are not supported. Editing the config is picked up live — enabling a format indexes its files, disabling one removes them. Non-Markdown files are full-text searchable and can be linked as targets from notes with an explicit extension (`[[data.csv]]`); a bare `[[data]]` still means `data.md`. Filter with `--format`/`--ext` on `search` and `list`. CSV/TSV files render as a table in `pumex read data.csv` (cap rows with `--limit N`, default 100); JSON and YAML render syntax-highlighted, and their top-level scalar keys (of a root object / mapping) become searchable properties (JSONC comments/trailing commas tolerated; YAML uses the first document of a multi-doc file, with `yaml`/`yml` listed separately). Other non-Markdown formats print raw until a renderer ships. Full details: [`docs/formats.md`](docs/formats.md).
 
 ## How it works
 

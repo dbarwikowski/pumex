@@ -1,0 +1,11 @@
+# Block-sequence root — `pumex read roster.yaml --limit N` caps shown elements.
+- name: capybara
+  habitat: wetlands
+- name: otter
+  habitat: rivers
+- name: heron
+  habitat: marshes
+- name: turtle
+  habitat: ponds
+- name: frog
+  habitat: lilypads
