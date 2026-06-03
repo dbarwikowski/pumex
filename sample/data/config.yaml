@@ -1,0 +1,13 @@
+# Sample YAML config — top-level scalar keys become queryable properties.
+# Comments and key order are preserved verbatim by `pumex read`.
+environment: prod
+replicas: 3
+enabled: yes
+owner: pumexbot
+region: euwest
+database:
+  host: localhost
+  port: 5432
+features:
+  - search
+  - backlinks

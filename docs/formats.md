@@ -57,10 +57,10 @@ Ignore rules apply to Markdown too, so you can finally exclude e.g.
 | Capability | Markdown | Other formats |
 |---|---|---|
 | Full-text search | yes | yes |
-| Structured properties / tags | yes | per-format (JSON: top-level scalars → properties; none from the framework fallback) |
+| Structured properties / tags | yes | per-format (JSON & YAML: top-level scalars → properties; none from the framework fallback) |
 | Appears in `pumex backlinks` | yes | yes — as a **target** |
 | Emits `[[wikilinks]]` | yes | no (target only, never a source) |
-| `pumex read` | rendered | CSV/TSV → table; JSON → syntax-highlighted; others → raw passthrough (until a renderer ships) |
+| `pumex read` | rendered | CSV/TSV → table; JSON & YAML → syntax-highlighted; others → raw passthrough (until a renderer ships) |
 | `create` / `append` / `prop set` | yes | no — Markdown-only |
 
 ### Linking to non-Markdown files
@@ -128,6 +128,45 @@ pumex read settings.json --raw      # verbatim, no highlighting
   object or scalar roots. JSON is never truncated by depth.
 - **`.jsonl` (newline-delimited JSON) is not supported** as a structured format.
   If enabled it is indexed as plain full text with no per-record properties.
+
+## Rendering YAML
+
+Enable `.yaml` and `.yml` with `"formats": ["yaml", "yml"]`. They are **separate
+entries** — enabling `"yaml"` does not auto-enable `.yml`; list each extension you
+use. YAML files are full-text searchable, and the **top-level scalar keys of the
+root mapping** (of the *first* document) become queryable properties, just like
+Markdown frontmatter and JSON:
+
+```sh
+pumex search --property env=prod --format yaml
+pumex property get config.yaml version
+```
+
+- **Values are raw scalar text — no type inference.** `enabled: yes` is the
+  string `"yes"`, `port: 8080` is `"8080"`. This keeps values culture-invariant.
+- **Nested mappings/sequences and YAML nulls** (`key:`, `~`, `null`) are not
+  properties — they stay searchable via full text only.
+- A **sequence-root** or **bare-scalar** document has no properties.
+- **Multi-document files** (`---` separators): only the **first** document
+  contributes properties; the whole file is always full-text indexed.
+- **Duplicate top-level keys** are invalid YAML (the spec forbids them): such a
+  file is treated as malformed → no properties, indexed as raw text.
+
+`pumex read` renders YAML with hand-rolled syntax highlighting that preserves the
+file verbatim — comments, anchors, and key order are kept exactly:
+
+```sh
+pumex read config.yaml            # syntax-highlighted, file preserved as-is
+pumex read records.yaml --limit 20 # block-sequence root: show the first 20 elements
+pumex read config.yaml --raw      # verbatim, no highlighting
+```
+
+- **`--limit`** caps how many top-level elements of a single-document **block
+  sequence** are shown (default `100`, with a `showing X of Y elements` notice).
+  It is ignored for mapping or scalar roots, for flow sequences (`[a, b]` on one
+  line), and for multi-document files.
+- **Malformed YAML never errors** — it falls back to full-text indexing and
+  best-effort rendering.
 
 ## Filtering by format
 

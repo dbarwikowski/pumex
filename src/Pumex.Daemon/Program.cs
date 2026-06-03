@@ -58,6 +58,7 @@ try
             s.AddSingleton<NoteParser>();
             s.AddSingleton<IFormatParser>(sp => sp.GetRequiredService<NoteParser>());
             s.AddSingleton<IFormatParser, JsonFormatParser>();
+            s.AddSingleton<IFormatParser, YamlFormatParser>();
             s.AddSingleton<RawTextParser>();
             s.AddSingleton<FormatParserRegistry>();
             s.AddSingleton<IInlineIndex, InlineIndex>();

@@ -2,7 +2,7 @@
   "name": "sample-smoke",
   "created": "2026-05-20T16:19:45.42044+00:00",
   "version": 1,
-  "formats": ["csv", "tsv", "json"],
+  "formats": ["csv", "tsv", "json", "yaml"],
   "ignore": ["**/*.tmp.md"],
   "dailyFolder": null,
   "dailyFormat": null,

@@ -158,6 +158,28 @@ Assert-Success 'search --property theme=dark --format json' (Invoke-Pumex 'searc
 Step 'read data/events.json --limit 2 (array-root cap)'
 Assert-Success 'read events.json --limit 2' (Invoke-Pumex 'read', 'data/events.json', '--limit', '2', '--vault', $vaultName) -contains 'showing 2 of 5 elements'
 
+# ── YAML ──────────────────────────────────────────────────────────────────────
+Step 'list --format yaml'
+Assert-Success 'list --format yaml shows config.yaml' (Invoke-Pumex 'list', '--format', 'yaml', '--vault', $vaultName) -contains 'config'
+
+Step 'read data/config.yaml (YAML rendering, mapping root)'
+Assert-Success 'read data/config.yaml' (Invoke-Pumex 'read', 'data/config.yaml', '--vault', $vaultName) -contains 'environment'
+
+Step 'YAML top-level scalars become properties'
+Assert-Success 'prop get environment from config.yaml' (Invoke-Pumex 'prop', 'data/config.yaml', 'environment', '--vault', $vaultName) -contains 'prod'
+
+Step 'search by a property extracted from YAML'
+Assert-Success 'search --property environment=prod --format yaml' (Invoke-Pumex 'search', '--property', 'environment=prod', '--format', 'yaml', '--vault', $vaultName) -contains 'config'
+
+Step 'search full-text hits a YAML body'
+Assert-Success 'search euwest finds config' (Invoke-Pumex 'search', 'euwest', '--vault', $vaultName) -contains 'config'
+
+Step 'read data/roster.yaml --limit 2 (sequence-root cap)'
+Assert-Success 'read roster.yaml --limit 2' (Invoke-Pumex 'read', 'data/roster.yaml', '--limit', '2', '--vault', $vaultName) -contains 'showing 2 of 5 elements'
+
+Step 'backlinks config.yaml -> dataset-notes'
+Assert-Success 'backlinks config.yaml -> dataset-notes' (Invoke-Pumex 'backlinks', 'config.yaml', '--vault', $vaultName) -contains 'dataset-notes'
+
 Step 'read non-markdown by explicit extension (raw fallback)'
 Assert-Success 'read data/animals.csv' (Invoke-Pumex 'read', 'data/animals.csv', '--vault', $vaultName) -contains 'capybara'
 
