@@ -28,6 +28,9 @@ internal static class ReadCommand
 
     private static async Task<int> RunAsync(IpcClient client, string note, bool raw, int limit, bool tasks, bool pending, VaultScope scope)
     {
+        if (pending && !tasks)
+            return CommandHelpers.Error("--pending requires --tasks.");
+
         var requestArgs = new Dictionary<string, string> { ["path"] = VaultArgs.ResolvePath(scope, note) };
         scope.ApplyTo(requestArgs);
 

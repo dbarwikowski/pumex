@@ -21,7 +21,7 @@ ignored.
 
 List a note's checkbox items.
 
-```
+```sh
 pumex read <note> --tasks [--pending] [--vault NAME | --vault-path PATH]
 ```
 
@@ -35,7 +35,7 @@ checkboxes in document order. `--pending` only filters what's displayed, so an
 item keeps the same number with or without it. Those numbers are what `check`
 expects.
 
-```
+```text
 $ pumex read checklist --tasks
   1 [ ] first smoke item
   2 [x] second smoke item
@@ -46,7 +46,7 @@ $ pumex read checklist --tasks
 
 Toggle a checkbox.
 
-```
+```sh
 pumex check <note> <n> [--vault NAME | --vault-path PATH]
 ```
 
@@ -54,7 +54,7 @@ pumex check <note> <n> [--vault NAME | --vault-path PATH]
 (`[ ]` ↔ `[x]`) and writes it back — run it again to undo. An out-of-range
 number errors.
 
-```
+```sh
 pumex check checklist 1   # tick item 1
 pumex check checklist 1   # untick it again
 ```
@@ -69,7 +69,7 @@ A task note is an ordinary indexed Markdown note that happens to live under
 
 Each task is its own folder so it can hold attachments:
 
-```
+```text
 tasks/
 └── task_2026-06-09_00/
     ├── write_report.md
@@ -93,7 +93,7 @@ rejected.
 
 ### task create
 
-```
+```sh
 pumex task create <name> [--content TEXT] [--vault NAME | --vault-path PATH]
 ```
 
@@ -101,7 +101,7 @@ Scaffolds `tasks/task_<today>_NN/<name>.md`. `--content` fills the note body.
 
 ### task read
 
-```
+```sh
 pumex task read <name> [--raw] [--limit N] [--vault NAME | --vault-path PATH]
 ```
 
@@ -109,7 +109,7 @@ Renders a task note (resolved by name among task notes, or by path).
 
 ### task list
 
-```
+```sh
 pumex task list [--status X,Y]... [--open] [--vault NAME | --vault-path PATH]
 ```
 
@@ -123,7 +123,7 @@ Completed**.
 
 ### task status
 
-```
+```sh
 pumex task status <name> [new-status] [--vault NAME | --vault-path PATH]
 ```
 
@@ -134,7 +134,7 @@ free-form but restricted to `[A-Za-z0-9_-]` (no spaces). Setting a status:
 - setting `DONE` stamps `completed` with today's date;
 - setting anything else clears `completed`.
 
-```
+```sh
 pumex task status write_report          # → NEW
 pumex task status write_report BLOCKED
 pumex task status write_report DONE      # stamps completed
@@ -142,7 +142,7 @@ pumex task status write_report DONE      # stamps completed
 
 ### task attach
 
-```
+```sh
 pumex task attach <name> <file> [--vault NAME | --vault-path PATH]
 ```
 

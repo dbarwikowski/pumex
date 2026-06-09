@@ -23,7 +23,7 @@ internal static class FrontmatterEditor
 
     public static (Dictionary<string, object> Frontmatter, string Body) Split(string raw)
     {
-        var normalized = raw.Replace("\r\n", "\n");
+        var normalized = raw.Replace("\r\n", "\n").Replace('\r', '\n');
 
         if (!normalized.StartsWith("---"))
             return (new Dictionary<string, object>(), normalized);

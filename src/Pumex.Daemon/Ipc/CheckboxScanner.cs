@@ -79,7 +79,9 @@ internal static partial class CheckboxScanner
     }
 
     private static string Normalize(string raw) =>
-        raw.IndexOf('\r') >= 0 ? raw.Replace("\r\n", "\n") : raw;
+        raw.IndexOf('\r') >= 0
+            ? raw.Replace("\r\n", "\n").Replace('\r', '\n')
+            : raw;
 
     [GeneratedRegex(@"^\s*[-*+]\s+\[[ xX]\]\s?")]
     private static partial Regex MarkerPrefix();

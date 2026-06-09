@@ -237,6 +237,7 @@ Assert-Success 'read checklist --tasks' (Invoke-Pumex 'read', 'checklist', '--ta
 
 Step 'read --tasks ignores fenced pseudo-checkboxes'
 $tasksOut = Invoke-Pumex 'read', 'checklist', '--tasks', '--vault', $vaultName
+Assert-Success 'read checklist --tasks (fence check)' $tasksOut
 if (($tasksOut.Output -join "`n") -notmatch 'fenced item') { Ok 'fenced checkbox ignored' } else { Fail 'fenced checkbox leaked into task list' }
 
 Step 'read --tasks --pending hides checked items'
@@ -268,6 +269,7 @@ Assert-Success 'task list --status DONE' (Invoke-Pumex 'task', 'list', '--status
 
 Step 'task list --open hides DONE tasks'
 $openOut = Invoke-Pumex 'task', 'list', '--open', '--vault', $vaultName
+Assert-Success 'task list --open' $openOut
 if (($openOut.Output -join "`n") -notmatch 'sample_task') { Ok '--open hides DONE task' } else { Fail '--open still shows DONE task' }
 
 Step 'task status restore NEW (restore fixture)'

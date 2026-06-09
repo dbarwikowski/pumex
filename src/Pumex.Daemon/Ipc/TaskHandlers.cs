@@ -51,6 +51,33 @@ internal static partial class Tasks
         return Path.Combine(root, prefix + (max + 1).ToString("D2"));
     }
 
+    /// <summary>Atomically allocates the next free task folder for <paramref name="date"/>
+    /// and writes the scaffolded note. The <c>NextTaskDir</c>-scan/write pair is racy under
+    /// concurrent creates, so this claims the note file with <c>FileMode.CreateNew</c> and
+    /// retries the next counter slot if another request won it first.</summary>
+    public static async Task<string> CreateTaskNoteAsync(
+        string vaultPath, DateTime date, string name, string content, CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < 32; attempt++)
+        {
+            var dir = NextTaskDir(vaultPath, date);
+            Directory.CreateDirectory(dir);
+            var candidate = Path.Combine(dir, name + ".md");
+            try
+            {
+                await using var fs = new FileStream(candidate, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                await using var writer = new StreamWriter(fs);
+                await writer.WriteAsync(content.AsMemory(), ct);
+                return candidate;
+            }
+            catch (IOException) when (File.Exists(candidate))
+            {
+                // Another create claimed this slot — retry with the next counter.
+            }
+        }
+        throw new IOException("Could not allocate a unique task folder after multiple attempts.");
+    }
+
     public static string Scaffold(string name, DateTime date, string? content)
     {
         var d = date.ToString("yyyy-MM-dd");
@@ -65,10 +92,22 @@ internal static partial class Tasks
     /// <c>tasks/**/&lt;name&gt;.md</c>. Duplicate names error — pass a path.</summary>
     public static string Resolve(VaultRecord vault, string nameOrPath)
     {
-        if (Path.IsPathFullyQualified(nameOrPath))
-            return Path.GetFullPath(nameOrPath);
-        if (nameOrPath.Contains('/') || nameOrPath.Contains('\\'))
-            return Path.GetFullPath(Path.Combine(vault.Path, nameOrPath));
+        if (Path.IsPathFullyQualified(nameOrPath) || nameOrPath.Contains('/') || nameOrPath.Contains('\\'))
+        {
+            var candidate = Path.IsPathFullyQualified(nameOrPath)
+                ? Path.GetFullPath(nameOrPath)
+                : Path.GetFullPath(Path.Combine(vault.Path, nameOrPath));
+
+            // A path must stay under <vault>/tasks — otherwise task:read/status/attach
+            // could be steered at arbitrary files via '..' or an absolute path.
+            var taskRoot = Path.GetFullPath(Root(vault));
+            var rel = Path.GetRelativePath(taskRoot, candidate);
+            if (rel == ".." || rel.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                || Path.IsPathRooted(rel))
+                throw new UnauthorizedAccessException(
+                    $"Task path '{nameOrPath}' must remain under <vault>/{Folder}.");
+            return candidate;
+        }
 
         var name = SanitizeName(nameOrPath);
         var root = Root(vault);
@@ -134,13 +173,8 @@ public class TaskCreateHandler : ICommandHandler
         var name = Tasks.SanitizeName(request.Require("name"));
         var date = Daily.ParseDate(request.Optional("date")) ?? DateTime.Now;
 
-        var dir = Tasks.NextTaskDir(vault.Path, date);
-        Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, name + ".md");
-        if (File.Exists(path))
-            throw new InvalidOperationException($"Task note already exists: {path}");
-
-        await File.WriteAllTextAsync(path, Tasks.Scaffold(name, date, request.Optional("content")), ct);
+        var content = Tasks.Scaffold(name, date, request.Optional("content"));
+        var path = await Tasks.CreateTaskNoteAsync(vault.Path, date, name, content, ct);
         await _inlineIndex.UpsertAsync(vault.Id, path);
         return new TaskResult(path, name);
     }

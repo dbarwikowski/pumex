@@ -25,6 +25,9 @@ internal static class CheckCommand
 
     private static async Task<int> RunAsync(IpcClient client, string note, int index, VaultScope scope)
     {
+        if (index < 1)
+            return CommandHelpers.Error("Checkbox number must be >= 1 (see 'read --tasks').");
+
         var requestArgs = new Dictionary<string, string>
         {
             ["path"] = VaultArgs.ResolvePath(scope, note),

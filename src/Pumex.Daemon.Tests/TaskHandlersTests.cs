@@ -8,7 +8,6 @@ public class TaskHandlersTests : IDisposable
     private readonly TempVault _vault = new();
     private readonly TestDbFixture _fx;
     private readonly NoteParser _parser = new();
-    private readonly string _today = DateTime.Now.ToString("yyyy-MM-dd");
 
     public TaskHandlersTests()
     {
@@ -101,13 +100,16 @@ public class TaskHandlersTests : IDisposable
         await CreateAsync("finishme", date: "2026-06-01");
         var handler = new TaskStatusHandler(_fx.Vaults, _fx.InlineIndex);
 
+        var before = DateTime.Now.ToString("yyyy-MM-dd");
         var summary = (TaskSummary)(await handler.HandleAsync(
             Req("task:status", ("vault", "test"), ("name", "finishme"), ("value", "DONE")),
             CancellationToken.None))!;
+        var after = DateTime.Now.ToString("yyyy-MM-dd");
 
+        // before/after brackets the write so the test can't flake across a midnight tick.
         Assert.Equal("DONE", summary.Status);
-        Assert.Equal(_today, summary.Completed);
-        Assert.Equal(_today, summary.Updated);
+        Assert.Contains(summary.Completed, new[] { before, after });
+        Assert.Contains(summary.Updated, new[] { before, after });
     }
 
     [Fact]
@@ -219,6 +221,16 @@ public class TaskHandlersTests : IDisposable
         var handler = new TaskStatusHandler(_fx.Vaults, _fx.InlineIndex);
         await Assert.ThrowsAsync<FileNotFoundException>(() => handler.HandleAsync(
             Req("task:status", ("vault", "test"), ("name", "ghost")), CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("../escape.md")]
+    [InlineData("tasks/../../escape.md")]
+    public async Task Status_rejects_paths_escaping_the_task_root(string nameOrPath)
+    {
+        var handler = new TaskStatusHandler(_fx.Vaults, _fx.InlineIndex);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => handler.HandleAsync(
+            Req("task:status", ("vault", "test"), ("name", nameOrPath)), CancellationToken.None));
     }
 }
 
