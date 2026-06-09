@@ -85,11 +85,14 @@ pumex read standup
 | `pumex vault add <name> <path>` | Register an existing directory as a vault |
 | `pumex vault remove <name>` | Unregister a vault (files untouched) |
 | `pumex read <note> [--raw] [--limit N]` | Display a note — parsed frontmatter + rendered body (Markdown, CSV/TSV as a table, JSON/YAML syntax-highlighted), or raw |
+| `pumex read <note> --tasks [--pending]` | List the note's `- [ ]` checkbox items (stable numbering; `--pending` shows only unchecked) |
+| `pumex check <note> <n>` | Toggle checkbox `n` in a note (run again to undo) |
 | `pumex create <note> [--content TEXT]` | Create a note (pipe stdin when `--content` is omitted) |
 | `pumex append <note> [--content TEXT] [--inline]` | Append to an existing note |
 | `pumex delete <note>` | Delete a note |
 | `pumex list [--format EXT]...` | List all notes in the vault, optionally filtered by format |
 | `pumex prop <note> [key [value]]` | List, get, or set frontmatter properties |
+| `pumex task <create\|read\|list\|status\|attach>` | Task notes under `tasks/` — create, list, set status, attach files |
 | `pumex daily [--date YYYY-MM-DD]` | Read today's (or a given) daily note |
 | `pumex daily append [--content TEXT]` | Append to a daily note |
 | `pumex daemon <status\|start\|stop\|restart\|install\|uninstall>` | Manage the daemon: ad-hoc start/stop or register as a user-level service |

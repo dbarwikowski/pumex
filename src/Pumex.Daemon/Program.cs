@@ -85,6 +85,13 @@ try
             s.AddSingleton<ICommandHandler, PropertySetHandler>();
             s.AddSingleton<ICommandHandler, DailyReadHandler>();
             s.AddSingleton<ICommandHandler, DailyAppendHandler>();
+            s.AddSingleton<ICommandHandler, NoteTasksHandler>();
+            s.AddSingleton<ICommandHandler, NoteCheckHandler>();
+            s.AddSingleton<ICommandHandler, TaskCreateHandler>();
+            s.AddSingleton<ICommandHandler, TaskReadHandler>();
+            s.AddSingleton<ICommandHandler, TaskListHandler>();
+            s.AddSingleton<ICommandHandler, TaskStatusHandler>();
+            s.AddSingleton<ICommandHandler, TaskAttachHandler>();
             s.AddHostedService<IpcServer>();
         })
         .Build();

@@ -23,6 +23,8 @@ root.Add(AppendCommand.Build());
 root.Add(DeleteCommand.Build());
 root.Add(PropCommand.Build());
 root.Add(DailyCommand.Build());
+root.Add(CheckCommand.Build());
+root.Add(TaskCommand.Build());
 root.Add(DaemonCommand.Build());
 
 return await root.Parse(args).InvokeAsync();
