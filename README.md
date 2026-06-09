@@ -133,7 +133,7 @@ Retrieval is lexical (the same FTS5 index as `search`), but the output is plain
 Markdown sized for a prompt window rather than a terminal table — natural-language
 questions work because stopwords are stripped and the rest are OR-matched.
 
-```
+```text
 $ pumex context "how does the indexer handle config changes"
 # Context: how does the indexer handle config changes
 2 sources · lexical

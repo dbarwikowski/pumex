@@ -7,7 +7,7 @@ agents and scripts assembling a prompt — `search` tells you *which* notes matc
 
 ## Synopsis
 
-```
+```text
 pumex context <text> [--limit N] [--budget CHARS]
               [--vault NAME | --vault-path PATH | --all]
 ```
@@ -39,7 +39,7 @@ content words are OR-matched, so notes hitting more terms rank higher.
 The output is plain Markdown, written verbatim so an agent can paste it straight
 into a prompt:
 
-```
+```text
 # Context: <query>
 <N> sources · lexical
 
@@ -65,7 +65,7 @@ working directory.
 
 ## Examples
 
-```
+```text
 # Natural-language question
 pumex context "how does the indexer handle config changes"
 
