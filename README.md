@@ -79,6 +79,7 @@ pumex read standup
 | `pumex ping` | Daemon health check |
 | `pumex new <name> [path]` | Create a vault marker + register with the daemon |
 | `pumex search [query] [--tag TAG]... [--property k=v]... [--format EXT]...` | FTS5 full-text search with optional tag, property, and format filters |
+| `pumex context <text> [--limit N] [--budget CHARS]` | Agent-ready context pack: ranked Markdown passages for a query, each with a `pumex read` drill-down pointer |
 | `pumex tags` | Tag aggregation with counts, vault-scoped by default |
 | `pumex backlinks <path-or-name>` | Notes that link to the given note via `[[wikilink]]` |
 | `pumex vault list` | List registered vaults |
@@ -123,6 +124,29 @@ Markdown is always indexed. A vault can opt into additional plain-text formats (
 ```
 
 `formats` adds extra extensions (Markdown is always on); `ignore` is glob excludes applied to every format. The config is parsed as strict JSON — comments and trailing commas are not supported. Editing the config is picked up live — enabling a format indexes its files, disabling one removes them. Non-Markdown files are full-text searchable and can be linked as targets from notes with an explicit extension (`[[data.csv]]`); a bare `[[data]]` still means `data.md`. Filter with `--format`/`--ext` on `search` and `list`. CSV/TSV files render as a table in `pumex read data.csv` (cap rows with `--limit N`, default 100); JSON and YAML render syntax-highlighted, and their top-level scalar keys (of a root object / mapping) become searchable properties (JSONC comments/trailing commas tolerated; YAML uses the first document of a multi-doc file, with `yaml`/`yml` listed separately). Other non-Markdown formats print raw until a renderer ships. Full details: [`docs/formats.md`](docs/formats.md).
+
+### Context for agents
+
+`pumex context <text>` turns a query into an agent-ready **context pack**: the
+best-matching passages, ranked, each with a `pumex read` pointer for drilling in.
+Retrieval is lexical (the same FTS5 index as `search`), but the output is plain
+Markdown sized for a prompt window rather than a terminal table — natural-language
+questions work because stopwords are stripped and the rest are OR-matched.
+
+```
+$ pumex context "how does the indexer handle config changes"
+# Context: how does the indexer handle config changes
+2 sources · lexical
+
+## wiki/architecture.md  (score 8.4)
+IndexingService
+Live config watch: a .pumex/config.json event reloads the policy and re-scans...
+→ pumex read architecture
+...
+```
+
+Tune the pack with `--limit N` (sources, default 5) and `--budget CHARS`
+(passage budget, default 6000). Full details: [`docs/context.md`](docs/context.md).
 
 ## How it works
 

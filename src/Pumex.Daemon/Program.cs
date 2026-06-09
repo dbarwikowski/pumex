@@ -50,6 +50,7 @@ try
             s.AddSingleton<ILinkRepository, LinkRepository>();
             s.AddSingleton<IVaultRepository, VaultRepository>();
             s.AddSingleton<ISearchRepository, SearchRepository>();
+            s.AddSingleton<IContextRepository, ContextRepository>();
 
             // Markdown is the only format parser compiled in by the framework;
             // Format parsers are added by their own work items (JSON below; CSV is
@@ -70,6 +71,7 @@ try
             s.AddSingleton<ICommandHandler>(_ => new VersionHandler(VersionInfo.Current));
             s.AddSingleton<ICommandHandler, StopHandler>();
             s.AddSingleton<ICommandHandler, SearchHandler>();
+            s.AddSingleton<ICommandHandler, ContextHandler>();
             s.AddSingleton<ICommandHandler, TagsHandler>();
             s.AddSingleton<ICommandHandler, BacklinksHandler>();
             s.AddSingleton<ICommandHandler, VaultsHandler>();

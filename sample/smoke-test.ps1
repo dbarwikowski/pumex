@@ -131,6 +131,22 @@ Assert-Success 'search --property priority=high' (Invoke-Pumex 'search', '--prop
 Step 'search --limit'
 Assert-Success 'search with --limit 2' (Invoke-Pumex 'search', 'note', '--limit', '2', '--vault', $vaultName)
 
+# ── context (agent context pack) ──────────────────────────────────────────────
+Step 'context gathers a ranked passage'
+# NL query → stopwords stripped, terms OR-ed; wiki/search.md is the strongest hit.
+$ctx = Invoke-Pumex 'context', 'how does full text search work', '--vault', $vaultName
+Assert-Success 'context passage mentions FTS5' $ctx -contains 'FTS5'
+
+Step 'context emits a read pointer'
+Assert-Success 'context includes a pumex read pointer' $ctx -contains 'pumex read search'
+
+Step 'context --limit 1 returns a single source'
+$ctx1 = Invoke-Pumex 'context', 'full text search', '--limit', '1', '--vault', $vaultName
+Assert-Success 'context --limit 1' $ctx1 -contains '1 source'
+
+Step 'context with no matches exits 0'
+Assert-Success 'context no-match' (Invoke-Pumex 'context', 'zzqqxxnomatch', '--vault', $vaultName) -contains 'No matches'
+
 # ── text formats (CSV / TSV / JSON) ───────────────────────────────────────────
 Step 'list --format csv'
 Assert-Success 'list --format csv shows animals.csv' (Invoke-Pumex 'list', '--format', 'csv', '--vault', $vaultName) -contains 'animals'
