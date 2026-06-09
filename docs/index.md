@@ -10,6 +10,7 @@ Pumex is a headless knowledge engine for plain Markdown vaults. All commands com
 | [`pumex ping`](ping.md) | Check whether the daemon is running |
 | [`pumex new`](new.md) | Create and register a new vault |
 | [`pumex search`](search.md) | Full-text + tag/property search |
+| [`pumex context`](context.md) | Agent-ready context pack: ranked passages + read pointers |
 | [`pumex tags`](tags.md) | List tags and their counts |
 | [`pumex backlinks`](backlinks.md) | List notes that link to a given note |
 | [`pumex vault list`](vault.md#list) | List registered vaults |

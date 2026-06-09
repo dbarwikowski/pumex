@@ -61,6 +61,34 @@ public class IpcServerTests
     }
 
     [Fact]
+    public async Task Context_handler_returns_a_passage_and_pointer_over_the_pipe()
+    {
+        using var fixture = await TestVault.CreateAsync();
+        var path = fixture.WriteNote("indexing.md",
+            "# Indexing\n\nThe indexer handles config changes by reloading the policy and rescanning.\n");
+        fixture.WriteNote("cats.md", "# Cats\n\nUnrelated content about naps.\n");
+        await fixture.UpsertAsync(fixture.Vault.Id, [
+            ParseFrom(path),
+            ParseFrom(Path.Combine(fixture.Root, "cats.md")),
+        ]);
+
+        await using var run = await IpcServerRun.StartAsync(
+            handlers => handlers.Add(new ContextHandler(fixture.Vaults, new ContextRepository(fixture.Context))));
+
+        var resp = await run.Client.SendAsync<List<ContextResult>>("context", new()
+        {
+            ["query"] = "how does the indexer handle config changes",
+            ["vaultPath"] = fixture.Vault.Path,
+        });
+
+        Assert.True(resp.Success, resp.Error);
+        var hit = Assert.Single(resp.Data!);
+        Assert.Equal("indexing.md", hit.RelativePath);
+        Assert.Equal("indexing", hit.Pointer);          // unique bare name
+        Assert.Contains("indexer handles config changes", hit.Passage);
+    }
+
+    [Fact]
     public async Task Note_read_resolves_bare_name_via_the_index()
     {
         using var fixture = await TestVault.CreateAsync();

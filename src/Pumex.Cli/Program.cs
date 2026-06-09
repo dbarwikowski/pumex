@@ -14,6 +14,7 @@ root.Add(PingCommand.Build());
 root.Add(NewVaultCommand.Build());
 root.Add(VaultCommand.Build());
 root.Add(SearchCommand.Build());
+root.Add(ContextCommand.Build());
 root.Add(TagsCommand.Build());
 root.Add(BacklinksCommand.Build());
 root.Add(ListCommand.Build());

@@ -70,5 +70,6 @@ pumex search --format csv,json
 
 ## See also
 
+- [`pumex context`](context.md) — gather a ranked, agent-ready context pack for a query
 - [`pumex tags`](tags.md) — list all tags in a vault
 - [`pumex backlinks`](backlinks.md) — find notes that link to a given note
