@@ -231,6 +231,65 @@ Assert-Success 'daily read 2026-05-19' (Invoke-Pumex 'daily', '--date', '2026-05
 Step 'daily append'
 Assert-Success 'daily:append' (Invoke-Pumex 'daily', 'append', '--content', 'Smoke test ran successfully.', '--vault', $vaultName) -contains 'appended'
 
+# ── note checkboxes (read --tasks / check) ────────────────────────────────────
+Step 'read --tasks lists checkbox items'
+Assert-Success 'read checklist --tasks' (Invoke-Pumex 'read', 'checklist', '--tasks', '--vault', $vaultName) -contains 'quokkacheck'
+
+Step 'read --tasks ignores fenced pseudo-checkboxes'
+$tasksOut = Invoke-Pumex 'read', 'checklist', '--tasks', '--vault', $vaultName
+Assert-Success 'read checklist --tasks (fence check)' $tasksOut
+if (($tasksOut.Output -join "`n") -notmatch 'fenced item') { Ok 'fenced checkbox ignored' } else { Fail 'fenced checkbox leaked into task list' }
+
+Step 'read --tasks --pending hides checked items'
+$pendingOut = Invoke-Pumex 'read', 'checklist', '--tasks', '--pending', '--vault', $vaultName
+Assert-Success 'read checklist --tasks --pending' $pendingOut -contains 'quokkacheck'
+if (($pendingOut.Output -join "`n") -notmatch 'already done') { Ok '--pending hides checked item' } else { Fail '--pending still shows checked item' }
+
+Step 'check toggles a checkbox on'
+Assert-Success 'check checklist 1' (Invoke-Pumex 'check', 'checklist', '1', '--vault', $vaultName) -contains 'checked'
+
+Step 'check again toggles it back (restore fixture)'
+Assert-Success 'check checklist 1 (undo)' (Invoke-Pumex 'check', 'checklist', '1', '--vault', $vaultName) -contains 'unchecked'
+
+# ── task notes (create / read / list / status / attach) ───────────────────────
+Step 'task list shows the committed sample task'
+Assert-Success 'task list' (Invoke-Pumex 'task', 'list', '--vault', $vaultName) -contains 'sample_task'
+
+Step 'task read sample_task'
+Assert-Success 'task read sample_task' (Invoke-Pumex 'task', 'read', 'sample_task', '--vault', $vaultName) -contains 'wombattask'
+
+Step 'task status get'
+Assert-Success 'task status sample_task' (Invoke-Pumex 'task', 'status', 'sample_task', '--vault', $vaultName) -contains 'NEW'
+
+Step 'task status set DONE (stamps completed)'
+Assert-Success 'task status sample_task DONE' (Invoke-Pumex 'task', 'status', 'sample_task', 'DONE', '--vault', $vaultName) -contains 'DONE'
+
+Step 'task list --status DONE'
+Assert-Success 'task list --status DONE' (Invoke-Pumex 'task', 'list', '--status', 'DONE', '--vault', $vaultName) -contains 'sample_task'
+
+Step 'task list --open hides DONE tasks'
+$openOut = Invoke-Pumex 'task', 'list', '--open', '--vault', $vaultName
+Assert-Success 'task list --open' $openOut
+if (($openOut.Output -join "`n") -notmatch 'sample_task') { Ok '--open hides DONE task' } else { Fail '--open still shows DONE task' }
+
+Step 'task status restore NEW (restore fixture)'
+Assert-Success 'task status sample_task NEW' (Invoke-Pumex 'task', 'status', 'sample_task', 'NEW', '--vault', $vaultName) -contains 'NEW'
+
+Step 'task create (new dated folder)'
+Assert-Success 'task create' (Invoke-Pumex 'task', 'create', 'smoke generated task', '--content', 'Created by smoke test.', '--vault', $vaultName) -contains 'created'
+
+Step 'task attach (move a file into the task folder)'
+$attachSrc = Join-Path $vaultPath 'smoke-attach.txt'
+Set-Content -Path $attachSrc -Value 'attachment body'
+Assert-Success 'task attach' (Invoke-Pumex 'task', 'attach', 'smoke_generated_task', $attachSrc, '--vault', $vaultName) -contains 'attached'
+
+Step 'cleanup: remove generated task folder(s) and any stray attach source'
+$today = (Get-Date).ToString('yyyy-MM-dd')
+Get-ChildItem -Path (Join-Path $vaultPath 'tasks') -Directory -Filter "task_${today}_*" -ErrorAction SilentlyContinue |
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $attachSrc) { Remove-Item $attachSrc -Force }
+Ok 'generated task artifacts cleaned up'
+
 # ── delete ───────────────────────────────────────────────────────────────────
 Step 'delete temp note'
 Assert-Success 'note:delete' (Invoke-Pumex 'delete', $tempNote, '--vault', $vaultName) -contains 'deleted'

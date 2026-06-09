@@ -16,11 +16,14 @@ Pumex is a headless knowledge engine for plain Markdown vaults. All commands com
 | [`pumex vault add`](vault.md#add) | Register an existing directory as a vault |
 | [`pumex vault remove`](vault.md#remove) | Unregister a vault (files untouched) |
 | [`pumex read`](note.md#read) | Read a note, rendered or raw |
+| [`pumex read --tasks`](tasks.md#checkboxes) | List a note's checkbox items |
+| [`pumex check`](tasks.md#check) | Toggle a checkbox in a note |
 | [`pumex create`](note.md#create) | Create a new note |
 | [`pumex append`](note.md#append) | Append content to an existing note |
 | [`pumex delete`](note.md#delete) | Delete a note |
 | [`pumex list`](note.md#list) | List all notes in a vault |
 | [`pumex prop`](property.md) | List, get, or set frontmatter properties |
+| [`pumex task`](tasks.md#task-notes) | Create and manage task notes under `tasks/` |
 | [`pumex daily`](daily.md) | Read today's daily note |
 | [`pumex daily append`](daily.md#append) | Append to a daily note |
 | [`pumex daemon status`](daemon.md#status) | Check daemon status |

@@ -1,6 +1,4 @@
 using Pumex.Contracts;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
 
 namespace Pumex.Daemon.Ipc;
 
@@ -90,50 +88,12 @@ public class PropertySetHandler : ICommandHandler
             throw new FileNotFoundException($"Note not found: {path}");
 
         var raw = await File.ReadAllTextAsync(path, ct);
-        var normalized = raw.Replace("\r\n", "\n");
-
-        var (frontmatter, body) = SplitFrontmatter(normalized);
+        var (frontmatter, body) = FrontmatterEditor.Split(raw);
         frontmatter[key] = value;
 
-        var newContent = SerializeWithFrontmatter(frontmatter, body);
+        var newContent = FrontmatterEditor.Serialize(frontmatter, body);
         await File.WriteAllTextAsync(path, newContent, ct);
         if (vault is not null) await _inlineIndex.UpsertAsync(vault.Id, path);
         return new NotePathResult(path);
-    }
-
-    private static (Dictionary<string, object> Frontmatter, string Body) SplitFrontmatter(string raw)
-    {
-        if (!raw.StartsWith("---"))
-            return (new Dictionary<string, object>(), raw);
-
-        var end = raw.IndexOf("\n---", 3);
-        if (end == -1)
-            return (new Dictionary<string, object>(), raw);
-
-        var yaml = raw[3..end].Trim();
-        var body = raw[(end + 4)..].TrimStart('\n');
-
-        if (string.IsNullOrWhiteSpace(yaml))
-            return (new Dictionary<string, object>(), body);
-
-        var deserializer = new DeserializerBuilder()
-            .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .IgnoreUnmatchedProperties()
-            .Build();
-
-        // Bubble parse errors up — silently overwriting malformed YAML would lose user data.
-        var parsed = deserializer.Deserialize<Dictionary<string, object>>(yaml)
-            ?? new Dictionary<string, object>();
-        return (parsed, body);
-    }
-
-    private static string SerializeWithFrontmatter(Dictionary<string, object> frontmatter, string body)
-    {
-        var serializer = new SerializerBuilder()
-            .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .Build();
-        var yaml = serializer.Serialize(frontmatter).TrimEnd('\n');
-        var bodyPart = string.IsNullOrEmpty(body) ? "" : "\n" + body;
-        return $"---\n{yaml}\n---\n{bodyPart}";
     }
 }
